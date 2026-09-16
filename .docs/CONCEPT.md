@@ -3,7 +3,7 @@
 Grobkonzept für eine eigenständige Contao-5.7-Erweiterung: einfache
 1:1-Textnachrichten zwischen Frontend-Mitgliedern.
 
-Stand: 2026-09-15. Dies ist ein **Konzept**, kein Implementierungsplan.
+Stand: 2026-09-16. Dies ist ein **Konzept**, kein Implementierungsplan.
 Es legt Bausteine, Schnittstellen und Entscheidungen fest; Reihenfolge,
 Aufwand und Detailschritte folgen später.
 
@@ -45,8 +45,11 @@ Das Bundle folgt den Konventionen des `contao-qna-bundle` (dort in
 * Übersetzungen als Symfony-PHP-Ressourcen (`translations/contao_*.de.php`).
 * `src/Model/` nur für Contao-Active-Record-Klassen. Eigene Wertobjekte
   liegen in `src/Domain/` ohne `Model`-Suffix.
-* Datenbankzugriff über Gateways (DBAL), Geschäftslogik in Services,
-  Controller bleiben dünn.
+* Datenbankzugriff über Gateways, Geschäftslogik in Services, Controller
+  bleiben dünn. Ob ein Gateway DBAL oder Contao-Models nutzt, entscheidet
+  der Anwendungsfall: Listen, Joins und Zähler über die Chat-Tabellen per
+  DBAL; Zugriffe auf Core-Tabellen mit vorhandener Model-Logik
+  (`MemberModel`, `FilesModel`) per Model.
 * Frontend-Assets als Encore-Entry über `heimrichhannot/contao-encore-contracts`.
   **Turbo liefert das Projekt**, nicht das Bundle: eine der beiden Entries aus
   `heimrichhannot/contao-ux-turbo-encore` (mit oder ohne Drive) muss auf der
@@ -99,7 +102,7 @@ Schichten, von außen nach innen:
 
 ```
 Content-Element ─┐
-Frame-Routen ────┼─▶ Controller ─▶ Services ─▶ Gateways (DBAL) ─▶ tl_chat_*
+Frame-Routen ────┼─▶ Controller ─▶ Services ─▶ Gateways ─▶ tl_chat_*, tl_member
 Action-Routen ───┘        │             │
 Twig-Funktion ────────────┘             └─▶ Events (EventDispatcher)
                                                     │
@@ -111,9 +114,14 @@ Twig-Funktion ────────────┘             └─▶ Even
   Sie enthalten keine Geschäftslogik.
 * **Services** sind die einzige schreibende Schicht. Jeder Schreibvorgang
   läuft in einer DBAL-Transaktion und endet mit einem Event.
-* **Gateways** kapseln SQL je Tabelle und hydrieren in `Domain`-Objekte.
+* **Gateways** kapseln den Datenzugriff je Tabelle und hydrieren in
+  `Domain`-Objekte. Chat-Tabellen per DBAL (Joins, `COUNT`, `FOR UPDATE`),
+  Mitglieder- und Dateizugriffe per `MemberModel`/`FilesModel`, wo deren
+  Finder und Logik bereits passen.
 * **Domain** enthält unveränderliche Wertobjekte (`Conversation`,
-  `Message`, `Contact`, `ConversationListItem`).
+  `Message`, `Contact`, `ConversationListItem`). `Conversation` trägt
+  `id` und `uuid`; Templates und URL-Generierung verwenden ausschließlich
+  `uuid`.
 * **Kontakt-Provider** sind getaggte Services hinter einem Interface, aus
   denen eine Registry per Alias den konfigurierten Provider liefert.
 
@@ -125,6 +133,7 @@ src/
   Configuration/ChatOptions.php
   Contact/ContactProviderInterface.php
   Contact/ContactProviderRegistry.php
+  Contact/ContactFactory.php
   Contact/Provider/MemberGroupsContactProvider.php
   Contact/Provider/SharedGroupsContactProvider.php
   ContaoManager/Plugin.php
@@ -141,7 +150,7 @@ src/
   Security/Voter/ConversationVoter.php
   Service/{ConversationService,MessageService,ReadTracker,PollingPolicy,
            FrontendMemberProvider,MemberDataEraser,MessageTextSanitizer}.php
-  Twig/ChatRuntime.php              (#[AsTwigFunction])
+  Twig/ChatRuntime.php              (#[AsTwigFunction] member_chat_unread_badge)
   View/{ChatViewFactory,TurboResponseFactory,Model/…}.php
 contao/
   config/config.php                 (BE_MOD, TL_MODELS falls nötig)
@@ -165,7 +174,8 @@ wie in Contao üblich.
 
 | Feld | Typ | Anmerkung |
 | --- | --- | --- |
-| `id` | int, PK | |
+| `id` | int, PK | nur intern: Joins, `pid` der Kindtabellen |
+| `uuid` | binary(16) | öffentliche Kennung in URLs, Symfony Uid v7 |
 | `tstamp` | int | Contao-Standard |
 | `memberLow` | int | kleinere der beiden `tl_member.id` |
 | `memberHigh` | int | größere der beiden `tl_member.id` |
@@ -173,7 +183,19 @@ wie in Contao üblich.
 | `lastMessageAt` | int, Default 0 | Sortierschlüssel der Liste |
 | `lastMessageId` | int, Default 0 | für den Auszug in der Liste, ohne Subquery |
 
-Indizes: **`UNIQUE(memberLow, memberHigh)`**, Index `lastMessageAt`.
+Indizes: **`UNIQUE(memberLow, memberHigh)`**, **`UNIQUE(uuid)`**, Index
+`lastMessageAt`.
+
+**Öffentliche Kennung ist die UUID, nicht die ID.** Fortlaufende IDs
+verraten Bestand und Wachstum und machen Adressen ratbar; der Voter wäre
+die einzige Verteidigungslinie. Die UUID erscheint im `auto_item`, in
+allen Frame- und Action-Routen und in Push-Deep-Links. Die Integer-ID
+verlässt den Server nicht. Nachrichten-IDs bleiben Integer, weil sie nur
+innerhalb einer bereits autorisierten Konversation sichtbar sind und für
+`?after=` und das Morphing praktisch sind. UUIDv7 ist zeitlich sortiert
+und fragmentiert den Index nicht; Contao selbst nutzt für `tl_files`
+v1 im selben `binary(16)`-Format. In URLs steht die RFC-Schreibweise
+(36 Zeichen), in der Datenbank die Binärform.
 
 Das geordnete Paar ersetzt einen Hash-`pairKey`: zwei Integer-Spalten sind
 lesbar, indexierbar und lassen sich direkt für die Zugriffsprüfung nutzen.
@@ -282,7 +304,7 @@ Die Übergabe von `int $viewerId` statt `FrontendUser` hält die Provider
 frei von Contao-Klassen und testbar. Die ID kommt aus dem
 `FrontendMemberProvider` (Security-Token, `instanceof FrontendUser`).
 
-### 4.2 `Contact` (Domain)
+### 4.2 `Contact` (Domain) und `ContactFactory`
 
 ```php
 final readonly class Contact
@@ -293,16 +315,44 @@ final readonly class Contact
         public ?string $subtitle = null,
         public ?string $avatarUrl = null,
     ) {}
-
-    public static function fromMemberRow(array $row): self; // firstname/lastname, Fallback username
 }
 ```
 
+Das DTO ist dumm und hat keine statische Factory-Methode. Die Erzeugung aus
+Contao-Daten übernimmt ein Service `ContactFactory`, weil sie Logik und
+Abhängigkeiten braucht:
+
+```php
+final readonly class ContactFactory
+{
+    public function fromMemberModel(MemberModel $member, ?string $subtitle = null): Contact;
+    public function fromMemberRow(array $row, ?string $subtitle = null): Contact;
+}
+```
+
+* **Anzeigename:** `trim(firstname.' '.lastname)`, Fallback `username`.
+  Entspricht `FrontendUser::getDisplayName()`, aber ohne eingeloggten
+  User zu benötigen.
+* **Avatar:** Contao speichert in Dateifeldern nur eine binäre UUID. Die
+  Factory löst sie über `Studio::createFigureBuilder()->fromUuid()->setSize()`
+  auf und liefert die URL des skalierten Bildes. Der Core kennt kein
+  Avatar-Feld an `tl_member`; deshalb ist der Feldname konfigurierbar
+  (`contact.avatar_field`, Default `null` = kein Avatar) und ebenso die
+  Bildgröße (`contact.avatar_size`, Contao-Bildgrößen-ID oder
+  `[Breite, Höhe, Modus]`). Fehlt die Datei oder ist das Feld leer, bleibt
+  `avatarUrl` `null`; das Template zeigt dann Initialen.
+* Beide Methoden bleiben: `fromMemberModel()` für Provider, die über
+  `MemberModel`-Finder arbeiten, `fromMemberRow()` für Provider mit eigener
+  DBAL-Abfrage. Eine Batch-Variante `fromMemberRows(array $rows)` löst
+  Avatare gesammelt über `FilesModel::findMultipleByUuids()` auf, damit
+  eine Suche mit 20 Treffern nicht 20 Einzelabfragen erzeugt.
+* Provider rufen die Factory auf und geben nur den `subtitle` selbst dazu.
+  Ein Provider mit eigener Datenquelle für Avatare kann das DTO auch
+  direkt bauen.
+
 Entscheidung gegen `MemberModel` als DTO: Provider können Kontext
-mitliefern, den das Member nicht hat (Abteilung, Rolle, Avatar aus
-Fremdquelle), die Anzeigename-Logik liegt an genau einer Stelle, und
-Provider sowie Voter sind ohne Datenbank testbar. Die Factory-Methode
-macht den Standardfall zu einer Zeile.
+mitliefern, den das Member nicht hat, die Namens- und Avatar-Logik liegt an
+genau einer Stelle, und Provider sowie Voter sind ohne Datenbank testbar.
 
 ### 4.3 Registry und Konfiguration
 
@@ -340,31 +390,60 @@ erledigt das Tagging.
 ### 5.1 Content-Element `member_chat`
 
 Ein einziges Content-Element, Kategorie `member_chat`, ohne eigene Felder.
-Es rendert die Hülle mit drei Bereichen, jeder ein Turbo-Frame:
+Die Hauptnutzer sind Smartphone-Nutzer; das Layout ist deshalb
+**mobile-first mit zwei Ansichten**, die sich aus der URL ergeben und nicht
+aus JavaScript-Zustand:
 
 ```
-┌─────────────────────────────┬───────────────────────────────────────┐
-│ #chat-search                │ #chat-messages                        │
-│  Suchfeld + Ergebnisliste   │  Nachrichtenverlauf (Polling)         │
-├─────────────────────────────┤                                       │
-│ #chat-conversations         │                                       │
-│  Liste (Polling, langsam)   ├───────────────────────────────────────┤
-│                             │ #chat-compose  Formular               │
-└─────────────────────────────┴───────────────────────────────────────┘
+Ohne auto_item  (/chat)           Mit auto_item  (/chat/<uuid>)
+┌─────────────────────────┐       ┌─────────────────────────┐
+│ #chat-search            │       │ ← Zurück   Max Muster   │  Kopf, statisch
+│  Suchfeld               │       ├─────────────────────────┤
+│  Ergebnisliste          │       │ #chat-messages          │
+├─────────────────────────┤       │  Verlauf (Polling)      │
+│ #chat-conversations     │       │  scrollt, füllt Höhe    │
+│  Liste (Polling, langsam│       │                         │
+│                         │       ├─────────────────────────┤
+│                         │       │ #chat-compose  sticky   │  nie gepollt
+└─────────────────────────┘       └─────────────────────────┘
 ```
 
-* Ohne eingeloggtes Mitglied rendert das Element einen Hinweis (oder
-  nichts, konfigurierbar per Template-Override). Kein Redirect, das
-  regelt die Seitenschutz-Konfiguration des Projekts.
+* **Listenansicht** (kein Item): Suche oben, Konversationen darunter. Ein
+  Tipp auf eine Konversation ist ein normaler Link auf `/chat/<uuid>`. Mit
+  Turbo Drive ist das ein Seitenwechsel ohne Reload, ohne Drive ein
+  normaler.
+* **Konversationsansicht** (Item vorhanden): Kopf mit Zurück-Link auf
+  `/chat` und dem Namen des Gesprächspartners, darunter der Verlauf, unten
+  das Formular. Der Kopf ist statisch gerendert, kein Frame.
+* **Ab Tablet-Breite** (Breakpoint 768 px in der Bundle-CSS; Custom
+  Properties funktionieren in Media Queries nicht, das Projekt überschreibt
+  den Wert über eigene Grid-Regeln, siehe 5.7) rendert der CE beide
+  Ansichten nebeneinander als CSS-Grid. Dafür liefert der Server bei vorhandenem Item **beide**
+  Bereiche; auf dem Smartphone blendet CSS die Liste aus. Das
+  Polling-Skript pollt keine unsichtbaren Frames
+  (`element.checkVisibility()`), damit die ausgeblendete Liste auf dem
+  Smartphone keine Requests erzeugt. Ohne Item rendert der Server auf
+  Desktop rechts einen leeren Zustand.
+* Ohne eingeloggtes Mitglied rendert das Element einen Hinweis. Kein
+  Redirect, das regelt die Seitenschutz-Konfiguration des Projekts.
 * Im Backend-Scope zeigt es nur einen Editor-Hinweis.
-* Die aktive Konversation steht als `auto_item` in der URL:
-  `/chat/42`. Ohne Item ist rechts ein leerer Zustand („Konversation
-  wählen oder Kontakt suchen") zu sehen. Die ID wird gegen den Voter
-  geprüft; fremde Konversationen liefern 404, nicht 403, um Existenz nicht
-  preiszugeben.
+* Fremde, unbekannte oder syntaktisch ungültige UUIDs liefern 404, nicht
+  403, um Existenz nicht preiszugeben. Die UUID wird vor dem Lookup
+  geparst; der Voter arbeitet danach intern auf der ID.
 * Der Controller aktiviert den Encore-Entry `huh_member_chat` per
-  `PageAssetsTrait`, setzt `Cache-Control: private, no-store` und taggt
-  keine Cache-Tags, weil die Antwort ohnehin nutzerspezifisch ist.
+  `PageAssetsTrait` und setzt `Cache-Control: private, no-store`.
+
+Mobile Details, die das Bundle mitbringt:
+
+| Thema | Lösung |
+| --- | --- |
+| Höhe | Konversationsansicht füllt `100dvh` abzüglich Kopf des Projekts (Offset als CSS-Custom-Property `--member-chat-offset-top`, Default 0); der Verlauf scrollt intern, nicht die Seite |
+| Virtuelle Tastatur | `#chat-compose` mit `position: sticky; bottom: 0`; Viewport-Meta des Projekts sollte `interactive-widget=resizes-content` setzen, wird im README dokumentiert |
+| Eingabe | `<textarea>` mit Auto-Grow bis 5 Zeilen, `enterkeyhint="send"`, `autocomplete="off"`, `autocapitalize="sentences"`; Enter sendet auf Desktop, auf Touch-Geräten macht Enter einen Umbruch und der Senden-Button sendet |
+| Scrollen | Nach dem Laden und nach eigener Nachricht ans Ende; bei eingehenden Nachrichten nur, wenn der Nutzer bereits am Ende war, sonst Hinweis „Neue Nachrichten ↓" |
+| Touch-Ziele | mindestens 44 × 44 px für Listeneinträge, Zurück, Senden, Suchtreffer |
+| Safe Areas | `padding-bottom: env(safe-area-inset-bottom)` am Formular für PWA im Standalone-Modus |
+| Standalone-PWA | Zurück-Link ist Pflicht, weil es keine Browser-Navigation gibt |
 
 ### 5.2 Frames und Polling
 
@@ -375,8 +454,13 @@ werden entdeckt, per `frame.reload()` neu geladen, Intervalle kommen aus
 
 * Exponentielles Backoff bei Fehlern, gedeckelt auf das Maximum.
 * Pause bei `document.hidden`, Neustart bei Sichtbarkeit.
-* Kein Reload, während der Frame Fokus hat oder `busy` ist (verhindert
-  Springen während des Tippens).
+* Kein Reload, während der Frame `busy` ist (laufende Anfrage). Eine
+  Fokus-Regel ist nicht nötig: Eingabe (`#chat-compose`) und Verlauf
+  (`#chat-messages`) sind getrennte Frames, das Tippen wird von
+  eintreffenden Nachrichten nie unterbrochen. `#chat-compose` wird
+  niemals gepollt, nur durch die Stream-Antwort nach dem Senden ersetzt.
+* Kein Reload für Frames, die `checkVisibility()` als unsichtbar meldet
+  (auf dem Smartphone ausgeblendete Liste).
 * `refresh="morph"` auf dem Nachrichten-Frame, damit die Scroll-Position
   und ein halb getippter Text erhalten bleiben.
 * Der Nachrichten-Frame scrollt bei neuen Nachrichten nur dann ans Ende,
@@ -416,16 +500,18 @@ eine Konversation mit dem Kontakt, wird sie geöffnet, nicht dupliziert.
 ### 5.5 Ungelesen-Zähler außerhalb der Chat-Seite
 
 Twig-Runtime mit `#[AsTwigFunction]` (Twig 3.28, Autokonfiguration durch
-`symfony/twig-bundle` verifiziert):
+`symfony/twig-bundle` verifiziert), genau eine Funktion:
 
-| Funktion | Rückgabe |
-| --- | --- |
-| `member_chat_unread_count()` | `int`, `0` ohne Login |
-| `member_chat_unread_badge(attributes = {})` | gerenderter Turbo-Frame mit Polling, leer ohne Login |
+```twig
+{{ member_chat_unread_badge({class: 'nav__badge'}) }}
+```
 
-Der Badge-Frame lädt die Count-Route (Abschnitt 6) und pollt im
-Badge-Intervall. Er benötigt Turbo auf der Seite; fehlt es, zeigt er den
-serverseitig gerenderten Anfangswert ohne Aktualisierung.
+Sie rendert einen Turbo-Frame mit dem serverseitig berechneten
+Anfangswert und Polling im Badge-Intervall; ohne eingeloggtes Mitglied
+rendert sie nichts. Bei `0` ist der Frame vorhanden, aber leer, damit das
+Polling ihn weiter aktualisiert. Ohne Turbo auf der Seite bleibt der
+Anfangswert stehen. Eine separate Funktion für den nackten Zahlenwert
+gibt es nicht.
 
 ### 5.6 Darstellung und Templates
 
@@ -438,7 +524,73 @@ serverseitig gerenderten Anfangswert ohne Aktualisierung.
 * Zeitangaben als `<time datetime>` mit relativer Formatierung
   („vor 3 Min.") nur clientseitig, um Cache- und Zeitzonenfragen zu vermeiden.
 
----
+### 5.7 Anpassung durch das Projekt
+
+Anforderung: Ein Projekt muss das Layout ohne Eingriff ins Bundle und ohne
+Kopieren ganzer Templates umbauen können. Drei Ebenen, jede für sich
+ausreichend, kombinierbar:
+
+**Ebene 1, nur CSS.** Der Cascade-Layer `member-chat` liegt unter allen
+ungelayerten Projekt-Styles. Jede Projekt-Regel gewinnt damit ohne
+Spezifitätskampf. Zusätzlich stellt das Bundle Custom Properties am
+Wurzelelement `.member-chat` bereit, die das Projekt einfach neu setzt:
+
+| Property | Wirkung | Default |
+| --- | --- | --- |
+| `--member-chat-offset-top` | Abzug von `100dvh` für den Projekt-Header | `0px` |
+| `--member-chat-sidebar-width` | Spaltenbreite der Liste auf Desktop | `20rem` |
+| `--member-chat-gap`, `--member-chat-radius` | Abstände, Rundungen | |
+| `--member-chat-bubble-own-bg`, `--member-chat-bubble-bg`, `--member-chat-bubble-fg` | Farben der Nachrichten | |
+| `--member-chat-accent` | Buttons, Badge, Fokusring | |
+
+Der Breakpoint ist bewusst keine Property, weil Media Queries keine
+`var()` akzeptieren. Wer ihn ändern will, setzt im Projekt-CSS die eine
+Grid-Regel für `.member-chat--with-conversation` neu; die Bundle-CSS
+dokumentiert diese Regel als Ansatzpunkt. Alternativ deaktiviert das
+Projekt die Bundle-CSS über die Encore-Entry-Einstellungen in Layout oder
+Seite und stylt das Markup komplett selbst.
+
+**Ebene 2, Twig-Blöcke statt Kopieren.** Das CE-Template
+`content_element/member_chat.html.twig` ist in benannte Blöcke geteilt.
+Ein Projekt legt im Theme ein gleichnamiges Template an, erweitert das
+Bundle-Template über die Contao-Template-Hierarchie und überschreibt nur
+den Block, den es braucht:
+
+```twig
+{% extends "@Contao/content_element/member_chat.html.twig" %}
+
+{% block conversation_header %}
+    <header class="my-chat-header">…{{ parent() }}</header>
+{% endblock %}
+```
+
+Vorgesehene Blöcke: `layout` (Anordnung der Bereiche), `search`,
+`conversations`, `conversation_header`, `messages`, `compose`,
+`empty_state`, `login_hint`. Jeder Frame-Inhalt liegt zusätzlich in einem
+eigenen Partial unter `member_chat/` (`conversation_list_item`,
+`message`, `compose_form`, `contact_result`, `unread_badge`), das ebenso
+per Block überschreibbar ist. Wer etwa nur die Nachrichtenblase ändern
+will, überschreibt `member_chat/message.html.twig`.
+
+**Ebene 3, Attribute und Daten.** Alle Wurzelelemente und Frames nutzen
+Contaos `attrs()`-Helper mit `mergeWith(...)`, sodass ein Projekt Klassen
+oder Data-Attribute anhängen kann, ohne das Element neu zu schreiben. Die
+View-Objekte, die die Templates erhalten, sind Teil der öffentlichen API
+und werden im README beschrieben, damit Projekt-Templates auf stabile
+Felder zugreifen.
+
+Vertrag, den das Bundle dafür einhält:
+
+* Klassennamen mit Präfix `member-chat__` und die Frame-IDs
+  (`chat-search`, `chat-conversations`, `chat-messages`, `chat-compose`)
+  sind stabil; das Polling-Skript hängt nur an `data-chat-poll` und den
+  Frame-IDs, nicht an Klassen.
+* Keine Inline-Styles, keine Layout-Entscheidung im JavaScript. Das Skript
+  fügt nur Zustandsattribute an (`data-chat-at-bottom`,
+  `data-chat-has-new`), auf die CSS reagiert.
+* Zwischen Mobil- und Desktop-Ansicht entscheidet ausschließlich CSS. Ein
+  Projekt, das etwa auf Desktop ebenfalls die Einspaltenansicht will,
+  löscht eine Grid-Regel.
 
 ## 6. Routen
 
@@ -451,12 +603,18 @@ Fragment. POST-Routen setzen `_token_check: true` und erwarten
 | Methode | Pfad | Name | Zweck |
 | --- | --- | --- | --- |
 | GET | `/_member_chat/conversations` | `contao_member_chat_conversations` | Frame: Liste |
-| GET | `/_member_chat/conversations/{id}/messages?after={mid}` | `contao_member_chat_messages` | Frame: Verlauf; mit `after` nur Neues als Turbo-Stream `append`; ohne als volles Frame |
-| GET | `/_member_chat/conversations/{id}/compose` | `contao_member_chat_compose` | Frame: Formular |
-| POST | `/_member_chat/conversations/{id}/messages` | `contao_member_chat_message_create` | Nachricht senden → Turbo-Stream |
+| GET | `/_member_chat/conversations/{uuid}/messages?after={mid}` | `contao_member_chat_messages` | Frame: Verlauf; mit `after` nur Neues als Turbo-Stream `append`; ohne als volles Frame |
+| GET | `/_member_chat/conversations/{uuid}/compose` | `contao_member_chat_compose` | Frame: Formular |
+| POST | `/_member_chat/conversations/{uuid}/messages` | `contao_member_chat_message_create` | Nachricht senden → Turbo-Stream |
 | POST | `/_member_chat/conversations` | `contao_member_chat_conversation_create` | Konversation finden/anlegen (`member` im Body) → Redirect |
 | GET | `/_member_chat/contacts?q=…` | `contao_member_chat_contacts` | Frame: Suchergebnis |
 | GET | `/_member_chat/unread` | `contao_member_chat_unread` | Frame: Badge |
+
+`{uuid}` trägt die Anforderung
+`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`; alles
+andere matcht die Route nicht und endet als 404. Der Controller wandelt
+über `Uuid::fromString()->toBinary()` und lädt per `ConversationGateway::findByUuid()`.
+Die Integer-ID taucht in keiner Route und in keinem Template auf.
 
 Lesestand: Das Laden des Nachrichten-Frames (voll oder inkrementell) setzt
 `lastReadMessageId` auf die höchste gelieferte ID. Eine eigene
@@ -475,13 +633,13 @@ ohne Rendern. Das spart Bandbreite und Rendering pro leerem Poll.
 | Service | Aufgabe |
 | --- | --- |
 | `FrontendMemberProvider` | Mitglieds-ID aus dem Security-Token, wirft `AuthenticationRequiredException` |
-| `ConversationService` | `openWith(viewerId, memberId)`: prüft `canContact`, findet oder legt an (Transaktion, Unique-Konflikt → bestehende Zeile), dispatcht `ConversationCreatedEvent` |
+| `ConversationService` | `openWith(viewerId, memberId)`: prüft `canContact`, findet oder legt an (Transaktion, UUIDv7 erzeugen, Unique-Konflikt → bestehende Zeile), dispatcht `ConversationCreatedEvent`; liefert die `Conversation` samt UUID für den Redirect |
 | `MessageService` | `send(conversationId, authorId, body)`: Zugriff per Voter, Sanitizing, Längen- und Rate-Limit, Insert, `lastMessageAt/Id` aktualisieren, `MessageSentEvent` |
 | `ReadTracker` | `markRead(conversationId, memberId, upToMessageId)`, dispatcht `MessagesReadEvent` nur bei Änderung |
 | `MessageTextSanitizer` | Trim, Normalisierung von Zeilenumbrüchen, Entfernen von Steuerzeichen, Längenprüfung. Kein HTML-Stripping nötig, da nie HTML ausgegeben wird (Twig-Escaping) |
 | `PollingPolicy` | Intervalle aus `ChatOptions`, wie im QnA-Bundle |
 | `MemberDataEraser` | Anonymisierung bei Mitgliedslöschung (Abschnitt 10) |
-| `ConversationVoter` | Attribut `MEMBER_CHAT_VIEW`: Mitglied ist Teilnehmer (`memberLow`/`memberHigh`) |
+| `ConversationVoter` | Attribut `MEMBER_CHAT_VIEW` auf dem geladenen `Conversation`-Objekt: Mitglied ist Teilnehmer (`memberLow`/`memberHigh`). Kein Lookup per ID aus dem Request, die Auflösung UUID → Datensatz passiert vorher im Gateway |
 
 Rate-Limit: `symfony/rate-limiter` ist in Contao 5.7 vorhanden (wird für den
 Suchindex genutzt). Eigener Limiter `contao_member_chat.message` als Sliding
@@ -600,11 +758,12 @@ Optional, nicht in der ersten Version: Aufbewahrungsfrist per Cron
 | Thema | Maßnahme |
 | --- | --- |
 | Authentifizierung | Jede Route und der CE verlangen `FrontendUser` im Token; sonst 401-Fragment bzw. Hinweis |
-| Autorisierung | `ConversationVoter` auf jeder Route mit Konversations-ID; Kontaktstart nur nach `canContact` |
+| Autorisierung | `ConversationVoter` auf jeder Route mit Konversationsbezug; Kontaktstart nur nach `canContact` |
+| Ratbare Adressen | Konversationen sind nach außen nur per UUIDv7 referenziert; Integer-IDs verlassen den Server nicht. Defense in Depth zum Voter |
 | CSRF | Contao-`RequestTokenListener` über `_token_check: true`; Token aus `ContaoCsrfTokenManager::getDefaultTokenValue()` im Formular, wird im Stream-Response mitgeliefert |
 | Injection / XSS | Nur Klartext gespeichert, Twig-Autoescaping, Autolink erzeugt Attribute selbst und escapet den Link-Text |
 | Spam / Missbrauch | Rate-Limiter pro Mitglied, Maximallänge, Mindestlänge 1 nach Trim |
-| Enumeration | Fremde Konversations-IDs liefern 404; Kontaktsuche liefert nur, was der Provider erlaubt; Mindestlänge der Suche 2 Zeichen, `limit` gedeckelt |
+| Enumeration | Fremde oder ungültige Konversations-UUIDs liefern 404; Kontaktsuche liefert nur, was der Provider erlaubt; Mindestlänge der Suche 2 Zeichen, `limit` gedeckelt |
 | Caching | Alle Antworten `private, no-store`; der CE setzt dieselben Header, damit der Seiten-Cache nichts Nutzerspezifisches hält |
 | Turbo-Cache | Chat-Seite mit `<meta name="turbo-cache-control" content="no-cache">` im CE-Template, sonst zeigt Turbo Drive beim Zurück-Navigieren veralteten Verlauf |
 
@@ -628,6 +787,9 @@ contao_member_chat:
         page_size: 50                  # Nachrichten pro Frame-Ladung
         search_limit: 20
         search_min_length: 2
+    contact:
+        avatar_field: null             # z. B. 'avatar', ein Dateifeld an tl_member
+        avatar_size: [96, 96, 'crop']  # Bildgrößen-ID oder [Breite, Höhe, Modus]
     providers:
         member_groups:
             groups: []                 # leer = kein Treffer, bewusst restriktiv
@@ -651,9 +813,10 @@ werden:
    `false` liefert? Vorschlag: ja, lesen und schreiben bleiben erlaubt,
    nur neue Konversationen sind gesperrt. Einfacher und für Nutzer
    nachvollziehbar.
-2. **Avatar.** Soll `Contact.avatarUrl` aus einem `tl_member`-Feld
-   (Projekt-Erweiterung) befüllt werden oder bleibt es leer, bis ein
-   Provider es setzt? Vorschlag: Bundle setzt nichts, Provider sind frei.
+2. **Breakpoint und Desktop-Variante.** Reicht die reine Mobilansicht für
+   die erste Version, sodass die zweispaltige Desktop-Darstellung als
+   spätere Ergänzung kommt? Vorschlag: beide von Anfang an, weil die
+   Desktop-Variante nur CSS plus die Sichtbarkeitsprüfung im Polling ist.
 3. **Push-Listener-Ort.** Im PWA-Bundle als optionale Integration (mit
    `conflict`/`suggest` in `composer.json`) oder als drittes, kleines
    Brücken-Paket? Vorschlag: im PWA-Bundle, geschützt durch
@@ -687,6 +850,8 @@ Pfade relativ zu `vendor/contao/core-bundle/`.
 | `tl_member`-Felder | `contao/dca/tl_member.php`: `firstname`, `lastname`, `username` (unique), `email`, `groups` (multiple, serialisiert), `disable`, `login`, `start`, `stop` |
 | Messenger-Prioritäten | `src/Messenger/Message/{Low,Normal,High}PriorityMessageInterface.php`; Web-Worker in `src/Messenger/WebWorker.php`; Cron-Worker-Konfiguration in `src/DependencyInjection/Configuration.php` (`messenger.workers`) |
 | Rate-Limiter vorhanden | `src/DependencyInjection/ContaoCoreExtension.php` nutzt `Symfony\Component\RateLimiter\RateLimiterFactory`; Paket `symfony/rate-limiter` im Vendor |
+| Bild-Auflösung für Avatare | `src/Image/Studio/Studio.php::createFigureBuilder()`; `src/Image/Studio/FigureBuilder.php`: `fromUuid(string)`, `fromFilesModel()`, `setSize()`; `contao/models/FilesModel.php::findByUuid()`; **kein** Avatar-Feld in `contao/dca/tl_member.php` |
+| UUID-Erzeugung | `vendor/symfony/uid/Uuid.php` (`symfony/uid` ist Abhängigkeit von `contao/core-bundle` 5.7); Muster für `binary(16)`-Spalte mit Unique-Index in `contao/dca/tl_files.php` (`uuid`), Erzeugung in `src/Filesystem/Dbafs/Dbafs.php` (`Uuid::v1()->toBinary()`, `Uuid::fromBinary()`) |
 | Twig-Attribute | `vendor/twig/twig/src/Attribute/AsTwigFunction.php` (Twig 3.28); Autokonfiguration in `vendor/symfony/twig-bundle/DependencyInjection/TwigExtension.php` (`registerAttributeForAutoconfiguration`) |
 | Turbo im Core | Format `turbo_stream` in `src/ContaoCoreBundle.php`; **keine** Frontend-Einbindung von Turbo im Core, daher `contao-ux-turbo-encore` als Projektvoraussetzung |
 | Template-Hierarchie | `contao/templates/.twig-root`, Auflösung als `@Contao/...` über `src/Twig/Loader/TemplateLocator.php` |
