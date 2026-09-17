@@ -42,6 +42,14 @@ request open 303 -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/to
 request legacy 200 -b "$out/alice.cookies" "$base/phase3a-chat-legacy/$chat_uuid.html"
 request modern 200 -b "$out/alice.cookies" "$base/phase3a-chat-modern/$chat_uuid.html"
 request list 200 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86"
+initial_cursor=$(python3 - "$out/list.html" <<'PYCODE'
+from pathlib import Path
+import re, sys
+source = Path(sys.argv[1]).read_text()
+print('since=' + re.search(r'data-chat-since="([^"]+)"', source)[1] + '&fingerprint=' + re.search(r'data-chat-fingerprint="([^"]+)"', source)[1])
+PYCODE
+)
+request initial-idle-list 204 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86&$initial_cursor"
 request messages 200 -b "$out/alice.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86"
 request compose 200 -b "$out/alice.cookies" "$base/_member_chat/conversations/$chat_uuid/compose?page=86"
 extract_token "$out/compose.html"
@@ -66,9 +74,11 @@ request word-search 200 -b "$out/alice.cookies" "$base/_member_chat/contacts?pag
 request no-contacts 200 -b "$out/alice.cookies" -H 'Accept-Language: de' "$base/_member_chat/contacts?page=86&q=zzzznomatch"
 request short-search 200 -b "$out/alice.cookies" "$base/_member_chat/contacts?page=86&q=C"
 request idle-list-one 200 -b "$out/bob.cookies" "$base/_member_chat/conversations?page=86&since=0"
+idle_since=$(awk 'tolower($1)=="x-chat-since:" {gsub("\r", "", $2); print $2}' "$out/idle-list-one.headers")
+idle_fingerprint=$(awk 'tolower($1)=="x-chat-fingerprint:" {gsub("\r", "", $2); print $2}' "$out/idle-list-one.headers")
 sleep 2
 request idle-message 204 -b "$out/bob.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86&after=$after"
-request idle-list-two 200 -b "$out/bob.cookies" "$base/_member_chat/conversations?page=86&since=0"
+request idle-list-two 204 -b "$out/bob.cookies" "$base/_member_chat/conversations?page=86&since=$idle_since&fingerprint=$idle_fingerprint"
 request older-messages 200 -b "$out/bob.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86&before=$after"
 request mixed-messages 400 -b "$out/bob.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86&before=$after&after=0"
 before=$(python3 - "$out/list.html" <<'PYCODE'
@@ -125,6 +135,8 @@ assert 'No contacts found.' not in (p/'short-search.html').read_text()
 def header(name, key):
     return re.search(r'^'+key+r':(.*)$', (p/(name+'.headers')).read_text(), re.M|re.I)[1].strip()
 assert header('idle-list-one', 'x-chat-since') == header('idle-list-two', 'x-chat-since')
+assert (p/'idle-list-two.html').stat().st_size == 0
+assert header('idle-list-one', 'x-chat-fingerprint') == header('idle-list-two', 'x-chat-fingerprint')
 print('Stable idle X-Chat-Since: '+header('idle-list-two', 'x-chat-since'))
 for name, action, target in [('older-messages','prepend','chat-messages'),('older-conversations','append','chat-conversations')]:
     source=(p/(name+'.html')).read_text()
@@ -138,7 +150,7 @@ for name, pressed in [('mute','true'),('unmute','false')]:
     source=(p/(name+'.html')).read_text()
     assert 'action="replace" target="chat-mute"' in source
     assert 'aria-pressed="'+pressed+'"' in source
-    assert '>Mute conversation</button>' in source
+    assert ('>Unmute conversation</button>' if pressed == 'true' else '>Mute conversation</button>') in source
     assert 'data-chat-poll' not in source and ' src=' not in source
 assert 'aria-label="Muted"' in (p/'muted-list.html').read_text()
 assert 'aria-describedby="chat-compose-error"' in (p/'invalid-message.html').read_text()

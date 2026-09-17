@@ -31,6 +31,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\MuteService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ReadTracker;
 use HeimrichHannot\SimpleMemberChatBundle\Tests\DatabaseTestCase;
 use HeimrichHannot\SimpleMemberChatBundle\View\ChatViewFactory;
+use HeimrichHannot\SimpleMemberChatBundle\View\ConversationPollFingerprint;
 use HeimrichHannot\SimpleMemberChatBundle\View\DaySeparatorFactory;
 use Psr\Log\NullLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -240,6 +241,29 @@ final class GatewaysTest extends DatabaseTestCase
         self::assertSame([$ids[1], $ids[2]], array_column($after->messages, 'id'));
         self::assertSame($ids[2], $after->lastMessageId);
         self::assertNull($after->beforeMessageId);
+
+        // Repeated inclusive windows are stable, but same-second writes are not.
+        $window = $reader->read($page, 9, includeList: true, since: 100);
+        $since = $window->changedAt;
+        $fingerprint = ConversationPollFingerprint::create($window->conversations, $since);
+        $idle = $reader->read($page, 9, includeList: true, since: $since);
+        self::assertSame($fingerprint, ConversationPollFingerprint::create($idle->conversations, $since));
+        $message = $this->messages->insert($conversation->id, 7, 'same second', $since);
+        $this->conversations->updateLastMessage($conversation, $message);
+        $changed = $reader->read($page, 9, includeList: true, since: $since);
+        $sentFingerprint = ConversationPollFingerprint::create($changed->conversations, $since);
+        self::assertNotSame($fingerprint, $sentFingerprint);
+        self::assertSame($since, $changed->changedAt);
+        $this->participants->markRead($conversation->id, 9, $message->id, $since, 42);
+        $read = $reader->read($page, 9, includeList: true, since: $since);
+        $readFingerprint = ConversationPollFingerprint::create($read->conversations, $since);
+        self::assertNotSame($sentFingerprint, $readFingerprint);
+        $this->participants->setMuted($conversation->id, 9, true, $since);
+        $muted = $reader->read($page, 9, includeList: true, since: $since);
+        self::assertNotSame($readFingerprint, ConversationPollFingerprint::create($muted->conversations, $since));
+        $this->participants->setMuted($conversation->id, 9, false, $since);
+        $unmuted = $reader->read($page, 9, includeList: true, since: $since);
+        self::assertSame($readFingerprint, ConversationPollFingerprint::create($unmuted->conversations, $since));
     }
 
     public function testIdleActivityIsThrottledWithoutChangingListCursor(): void

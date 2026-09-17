@@ -11,6 +11,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\ChatReader;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
 use HeimrichHannot\SimpleMemberChatBundle\Service\FrontendMemberProvider;
 use HeimrichHannot\SimpleMemberChatBundle\View\ChatContextFactory;
+use HeimrichHannot\SimpleMemberChatBundle\View\ConversationPollFingerprint;
 use HeimrichHannot\SimpleMemberChatBundle\View\TurboResponseFactory;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -53,11 +54,14 @@ final readonly class ChatFrameController
         $context['history'] = $cursor !== null;
         $context['view'] = $this->reader->read($page, $viewerId, includeList: true, since: $since, beforeTimestamp: $cursor[0] ?? null, beforeId: $cursor[1] ?? null);
         if ($since !== null || $cursor !== null) {
-            $response = $this->responses->stream($this->twig->render('@Contao/member_chat/conversations.stream.html.twig', $context));
+            $unchanged = $since !== null && ($context['view']->conversations === [] || $request->query->getString('fingerprint') === ConversationPollFingerprint::create($context['view']->conversations, $since));
+            $response = $unchanged ? $this->responses->html('', 204) : $this->responses->stream($this->twig->render('@Contao/member_chat/conversations.stream.html.twig', $context));
             if ($cursor !== null) {
                 $response->headers->set('X-Chat-Before', $context['view']->beforeConversation ?? '');
             } else {
-                $response->headers->set('X-Chat-Since', (string) max($since ?? 0, $context['view']->changedAt));
+                $nextSince = max($since ?? 0, $context['view']->changedAt);
+                $response->headers->set('X-Chat-Since', (string) $nextSince);
+                $response->headers->set('X-Chat-Fingerprint', ConversationPollFingerprint::create($context['view']->conversations, $nextSince));
             }
 
             return $response;

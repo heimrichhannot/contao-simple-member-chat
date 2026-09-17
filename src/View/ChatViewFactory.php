@@ -61,6 +61,7 @@ final readonly class ChatViewFactory
             $moreMessages && $messages !== [] ? $messages[0]->id : null,
             $moreConversations && $last !== null ? $last->lastMessageAt . ',' . $last->id : null,
             $muted,
+            ConversationPollFingerprint::create($list, $changedAt),
         );
     }
 }

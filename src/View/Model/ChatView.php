@@ -20,6 +20,7 @@ final readonly class ChatView
         public ?int $beforeMessageId = null,
         public ?string $beforeConversation = null,
         public bool $muted = false,
+        public string $conversationFingerprint = '',
     ) {
     }
 }

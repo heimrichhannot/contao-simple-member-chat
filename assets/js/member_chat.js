@@ -181,6 +181,7 @@ async function poll(frame) {
             do {
                 const url = new URL(frame.src, document.baseURI)
                 url.searchParams.set(messages ? "after" : "since", messages ? frame.dataset.chatAfter || "0" : frame.dataset.chatSince || "0")
+                if (!messages && frame.dataset.chatFingerprint) url.searchParams.set("fingerprint", frame.dataset.chatFingerprint)
                 const response = await fetch(url, {
                     headers: { Accept: "text/vnd.turbo-stream.html" },
                     credentials: "same-origin",
@@ -198,6 +199,7 @@ async function poll(frame) {
                     // send may have a higher ID than incoming messages still unseen.
                     frame.dataset.chatAfter = String(Math.max(Number(frame.dataset.chatAfter || 0), Number(response.headers.get("X-Chat-After"))))
                 } else {
+                    frame.dataset.chatFingerprint = response.headers.get("X-Chat-Fingerprint") || ""
                     frame.dataset.chatSince = String(Math.max(Number(frame.dataset.chatSince || 0), Number(response.headers.get("X-Chat-Since"))))
                 }
             } while (messages && count >= Number(frame.dataset.chatPageSize) && !document.hidden && frame.checkVisibility())
@@ -340,7 +342,7 @@ document.addEventListener("turbo:before-frame-render", event => {
     if (!frame.matches?.("[data-chat-poll]")) return
     const incoming = event.detail.newFrame
     // Turbo keeps the existing frame element; copy the server window cursor.
-    for (const key of ["chatAfter", "chatSince", "chatPageSize"]) {
+    for (const key of ["chatAfter", "chatSince", "chatPageSize", "chatFingerprint"]) {
         if (incoming.dataset[key] !== undefined) frame.dataset[key] = incoming.dataset[key]
     }
     frame.dataset.chatMode = "incremental"
