@@ -36,15 +36,29 @@ Deutsch nur in Übersetzungsdateien und in diesem Konzept.
 
 ### 0.2 Hauskonventionen
 
-Das Bundle folgt den Konventionen des `contao-qna-bundle` (dort in
-`AGENTS.md` festgehalten):
+Maßgeblich ist die `AGENTS.md` dieses Repositories (Stand 2026-09-17),
+ergänzt um `AGENTS.local.md` für die DDEV-Integrationsumgebung
+`contao0507.contao`. Die für das Konzept relevanten Regeln:
 
 * Listener, Callbacks, Hooks, Content-Elemente ausschließlich per PHP-Attribut
   (`#[AsCallback]`, `#[AsHook]`, `#[AsEventListener]`, `#[AsContentElement]`).
 * DCA-SQL als Doctrine-Schema-Arrays, keine SQL-Strings.
 * Übersetzungen als Symfony-PHP-Ressourcen (`translations/contao_*.de.php`).
+* Content-Elemente, keine Frontend-Module. Twig-Templates ausschließlich
+  unter `contao/templates/` mit `.twig-root`, keine `.html5`-Templates.
 * `src/Model/` nur für Contao-Active-Record-Klassen. Eigene Wertobjekte
-  liegen in `src/Domain/` ohne `Model`-Suffix.
+  liegen in `src/Domain/` ohne `Model`-Suffix. `src/Domain/` ist in der
+  `AGENTS.md` dieses Repositories nicht vorgegeben; das Konzept übernimmt
+  die Struktur aus dem QnA-Bundle als Präzedenz.
+* Keine trivialen Wrapper-Methoden, die nur delegieren oder einen Ausdruck
+  umbenennen. Methoden nur extrahieren, wenn sie Logik kapseln, Duplikate
+  entfernen oder einen Erweiterungspunkt bilden. Für das Konzept heißt
+  das: `PollingPolicy` aus dem QnA-Bundle wird nicht übernommen, wenn die
+  Intervalle nur aus `ChatOptions` durchgereicht werden; Controller und
+  Twig-Runtime lesen sie dann direkt aus `ChatOptions`.
+* Werkzeuge im Repository: ECS mit Symfony-Set (`ecs.php`), PHPStan
+  Level 1 mit Symfony-Extension (`phpstan.neon`), Rector mit Contao-Sets
+  (`rector.php`). Pfade derzeit nur `src/`; `contao/` ist auskommentiert.
 * Datenbankzugriff über Gateways, Geschäftslogik in Services, Controller
   bleiben dünn. Ob ein Gateway DBAL oder Contao-Models nutzt, entscheidet
   der Anwendungsfall: Listen, Joins und Zähler über die Chat-Tabellen per
@@ -151,7 +165,7 @@ src/
   Exception/…                      (Domain-Exceptions mit Status + Translation-Key)
   Gateway/{ConversationGateway,ParticipantGateway,MessageGateway}.php
   Security/Voter/ConversationVoter.php
-  Service/{ConversationService,MessageService,ReadTracker,MuteService,PollingPolicy,
+  Service/{ConversationService,MessageService,ReadTracker,MuteService,
            FrontendMemberProvider,MemberDataEraser,MessageTextSanitizer,
            ConversationUrlGenerator}.php
   Twig/ChatRuntime.php              (#[AsTwigFunction] member_chat_unread_badge)
@@ -767,7 +781,6 @@ ohne Rendern. Das spart Bandbreite und Rendering pro leerem Poll.
 | `ReadTracker` | `markRead(conversationId, memberId, upToMessageId)`, dispatcht `MessagesReadEvent` nur bei Änderung |
 | `MuteService` | `setMuted(conversationId, memberId, bool)`; wirkt auf Zähler, Liste und Push. Nachrichten kommen weiterhin an, der Absender erfährt nichts |
 | `MessageTextSanitizer` | Trim, Normalisierung von Zeilenumbrüchen, Entfernen von Steuerzeichen, Längenprüfung. Kein HTML-Stripping nötig, da nie HTML ausgegeben wird (Twig-Escaping) |
-| `PollingPolicy` | Intervalle aus `ChatOptions`, wie im QnA-Bundle |
 | `MemberDataEraser` | Anonymisierung bei Mitgliedslöschung (Abschnitt 10) |
 | `ConversationUrlGenerator` | `forConversation(Conversation, int $memberId): ?string`, `listPage(int $memberId): ?string`. Reihenfolge: `lastPageId` des Teilnehmers, sonst `memberChatPage` der Root-Seite (bei mehreren Roots die des ersten veröffentlichten Roots mit gesetztem Feld), sonst `null`. URL-Erzeugung über `contao.routing.content_url_generator` mit der UUID als Parameter. Einzige Stelle für Konversations-URLs: Push, Badge, Redirect nach Kontaktstart, Listen-Links |
 | `ConversationVoter` | Attribut `MEMBER_CHAT_VIEW` auf dem geladenen `Conversation`-Objekt: Mitglied ist Teilnehmer (`memberLow`/`memberHigh`). Kein Lookup per ID aus dem Request, die Auflösung UUID → Datensatz passiert vorher im Gateway |
@@ -948,15 +961,17 @@ Konstruktor.
 
 | Ebene | Umfang | Werkzeug |
 | --- | --- | --- |
-| Unit, ohne Datenbank | Kontakt-Provider, `ContactFactory`, `MessageTextSanitizer`, `ConversationVoter`, `PollingPolicy`, `ConversationUrlGenerator`, Ableitung `memberLow`/`memberHigh`; Gateways gemockt | PHPUnit 12 |
+| Unit, ohne Datenbank | Kontakt-Provider, `ContactService`, `ContactFactory`, `MessageTextSanitizer`, `ConversationVoter`, `ConversationUrlGenerator`, Ableitung `memberLow`/`memberHigh`; Gateways gemockt | PHPUnit 12 |
 | Gateway, echte Datenbank | Unique-Konflikt beim gleichzeitigen Anlegen, Ungelesen-Zähler mit `muted`, `before`/`after`-Fenster für Nachrichten und Liste, Anonymisierung, Kaskade | `contao/test-case` mit Testverbindung, etwa ein Dutzend Fälle |
 | Integration | Container-Build, Routen, Migration, Backend-Modul, manueller Durchlauf; Testmitglieder in zwei Gruppen, damit beide Provider prüfbar sind | DDEV-Projekt per Symlink, Zugang in `AGENTS.local.md` wie im QnA-Bundle |
 | Browser, manuell | Checkliste im Repository: zwei Browser nebeneinander, Senden und Poll, Tab im Hintergrund, Nachladen nach oben, leerer Text, Rate-Limit, Stummschalten, Fokus nach Senden, iOS-Gerät echt und im Standalone-Modus | Checkliste `.docs/BROWSER_CHECKLIST.md` |
 | Browser, automatisiert | Späterer Ausbau, nicht in der ersten Version | Playwright gegen das DDEV-Projekt |
 
 Dev-Abhängigkeiten: `contao/core-bundle:^5.7`, `contao/test-case`,
-`phpunit/phpunit:^12`, `phpstan/phpstan` mit Symfony-Extension,
-`friendsofphp/php-cs-fixer`; `phpunit.xml.dist` im Repository.
+`phpunit/phpunit:^12`, dazu die im Repository bereits konfigurierten
+Werkzeuge `symplify/easy-coding-standard`, `phpstan/phpstan` mit
+`phpstan/phpstan-symfony` und `rector/rector` mit `contao/contao-rector`;
+`phpunit.xml.dist` ist zu ergänzen.
 
 ## 12a. Todo
 
