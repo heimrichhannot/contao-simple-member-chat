@@ -1159,3 +1159,24 @@ Abgeschlossen 2026-09-17, drei Commits, Bericht unter
 | Testdatenbank | Fixtures für `tl_member` und `tl_member_group` in `tests/DatabaseTestCase.php` | Phase 3 nutzt dieselbe Basis für Controller-nahe Tests |
 | Framework-Adapter | `Adapter::__call('findMultipleByUuids', …)` explizit statt magischem Aufruf, wegen PHPStan-Strict-Regel zu dynamischen statischen Aufrufen | Kandidat für eine Aufräumrunde, sobald ein sauberer Weg gefunden ist |
 
+### Erkenntnisse aus Phase 3a
+
+Abgeschlossen 2026-09-17, drei Codex-Commits plus ein Review-Fix, Bericht
+unter `.docs/build/reports/phase-3a-frontend-core.md`. Zusätzlich zur
+HTTP-Verifikation wurde die Demo-Seite im Browser geprüft (Desktop und
+375 px, Senden, Polling mit einer zweiten Sitzung, Zurück-Navigation,
+Kontaktsuche).
+
+| Thema | Befund | Folge |
+| --- | --- | --- |
+| Frame-Antworten mit `src` | Turbo lehnt eine Frame-Antwort ab, deren `<turbo-frame>` ein `src` gleich der Anfrage-URL trägt („source URL which references itself"), und leert das Frame. Die Partials setzten `src` auch in der Antwort; der Nachrichtenverlauf war im Browser leer | Behoben im Review-Fix: `src` und `loading` nur beim eingebetteten Rendern (`embedded` im Kontext), Regressionsprüfung im Verifikationsskript. Regel für alle weiteren Frames |
+| Sprache der Fragmente | Frame- und Stream-Antworten rendern in der Request-Sprache (Accept-Language), nicht in der Seitensprache; nach dem Senden wechselten Beschriftungen von Englisch auf Deutsch | Phase 3b: Locale aus der übergebenen Seite setzen (`$page->language`), bevor gerendert wird |
+| Teilnehmer-`tstamp` bei jedem Poll | Jeder Nachrichten-Poll schreibt `lastReadAt` und `tstamp`, auch ohne neue Nachricht. Da `changedAt` auf `tstamp` basiert, meldet der Listen-Poll die offene Konversation bei jedem Durchlauf als geändert (beobachtet: `since` stieg bei jedem 15-s-Poll) | Phase 3b: `tstamp` nur bei tatsächlicher Änderung von Lesestand oder Stummschaltung; Aktivitätsupdate ohne Änderung drosseln |
+| Enter zum Senden | Erkennung über `pointer: coarse` **und** `maxTouchPoints === 0`; Geräte mit Touchscreen und Tastatur (Laptops) senden mit Enter nicht | Phase 3b: nur `pointer: coarse` auswerten |
+| Höhe der Konversationsansicht | `100dvh` minus statischem Offset; auf der Demo-Seite beginnt der Chat unter Header und Login-Modul, der Block ragt aus dem Viewport, die Seite scrollt zusätzlich zum Verlauf | Phase 3b: Höhe dynamisch aus `visualViewport.height` minus tatsächlicher Oberkante des Chat-Elements setzen; der statische Offset bleibt als Fallback ohne JavaScript |
+| Eingehende Nachrichten | erscheinen per Polling innerhalb des Intervalls, scrollen aber nicht nach; Liste aktualisiert Auszug korrekt | Phase 3b wie geplant: nachscrollen, wenn der Nutzer am Ende war, sonst Hinweis |
+| Kontaktsuche | Debounce und Anfrage funktionieren; Prefix-Match gilt für das ganze Feld, „Car" findet „Chat Carol" nicht; leere Treffer zeigen keinen Hinweis | Phase 3b: Wort-Prefix (`LIKE 'q%' OR LIKE '% q%'`), Text für „keine Treffer" |
+| Leerer Zustand mobil | „Konversation wählen" erscheint auf dem Smartphone unter der Liste | Phase 3b: nur ab Tablet-Breite zeigen |
+| Turbo-Cache-Meta | `HtmlHeadBag` funktioniert in Legacy- und Twig-Layout, keine `TL_HEAD`-Lösung nötig | Konzept 5.1 bestätigt, keine Änderung |
+| Demo-Umgebung | Das Browser-Panel der Desktop-App erlaubt nur `localhost` und `127.0.0.1`; die Root-Seite des DDEV-Demos wurde von `contao0507.contao.hhdev` auf leere Domain umgestellt, damit `https://127.0.0.1:<port>` antwortet | Reversibel; für dauerhafte Nutzung `host_https_port` im DDEV-Projekt fixieren |
+
