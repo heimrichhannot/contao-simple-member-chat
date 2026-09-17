@@ -1214,3 +1214,30 @@ ohne leeren Zustand; `since` bleibt über zwei Leerlauf-Polls konstant
 | Nachladen kann bei Tab-Wechsel hängen bleiben | `loadMore()` wartet innerhalb von `try` auf einen `requestAnimationFrame`. Wird der Tab in diesem Moment versteckt, läuft weder der Rest des `try` noch das `finally`: `aria-live` bleibt `off` und die Frame-Sperre bestehen, bis der Tab wieder sichtbar ist | Das Warten auf den Frame aus dem kritischen Abschnitt nehmen oder gegen `visibilitychange` absichern |
 | Leerlauf-Poll rendert den obersten Eintrag neu | `since` ist inklusiv, also liefert jeder Poll die Konversation mit genau diesem Zeitstempel erneut; gemessen zwei Stream-Renderings pro Poll ohne inhaltliche Änderung | Bei „nichts Neues" mit `204` antworten oder den Cursor exklusiv mit ID-Tiebreaker führen |
 
+### Erkenntnisse aus Phase 3c
+
+Abgeschlossen 2026-09-17, drei Codex-Commits. Alle fünf Befunde aus dem
+Browser-Review von Phase 3b sind behoben und im Browser nachgemessen
+(Desktop und 375 px, angemeldet als Demo-Mitglied Alice, Gegenseite per
+HTTP-Skript).
+
+| Befund | Messung vorher | Messung nachher |
+| --- | --- | --- |
+| Höhe bei Seiten-Scroll | 435 px, unverändert nach dem Scrollen | 435 px, nach dem Scrollen 812 px; der Chat füllt den Viewport |
+| Kopfzeile und Verlaufshöhe | Kopf 191 px, Verlauf 99 px | Kopf 44 px, Name einzeilig mit Ellipse, Verlauf 246 px und nach dem Scrollen 623 px; Mindesthöhe `--member-chat-history-min-height` |
+| Sichtbarer Stumm-Zustand | Beschriftung unverändert, keine Zustandsauszeichnung | Beschriftung wechselt auf „Unmute conversation", Hintergrund wechselt, zusätzlich innenliegender Rahmen; Fokus kehrt auf den Schalter zurück |
+| Nachlade-Sperre bei verstecktem Tab | Warten auf einen Animations-Frame im kritischen Abschnitt | Warten entfernt; Node-Test mit verstecktem Dokument und nie laufenden Animations-Frames belegt gelöste Sperre und `aria-live` zurück auf `polite` |
+| Leerlauf-Rendering der Liste | zwei Stream-Renderings pro Poll | null Renderings über zwei Polls, Antworten sind `204` mit rund 300 Byte; Cursor und Fingerabdruck bleiben stehen |
+
+Die Gegenprobe ist bestanden: Eine echte neue Nachricht erzeugt weiterhin
+genau zwei Renderings, Liste und Verlauf aktualisieren sich, Cursor und
+Fingerabdruck rücken vor.
+
+Neu eingeführt und für Phase 4 zu dokumentieren: der optionale
+Abfrageparameter `fingerprint`, der Antwort-Header `X-Chat-Fingerprint`,
+das Frame-Attribut `data-chat-fingerprint` und das Feld
+`ChatView.conversationFingerprint`. Der Fingerabdruck entsteht aus den
+Standard-Ansichtsdaten; Projekt-Templates, die zusätzlichen wechselnden
+Zustand anzeigen, müssen ihn erweitern, sonst unterdrückt der Server
+deren Aktualisierung.
+
