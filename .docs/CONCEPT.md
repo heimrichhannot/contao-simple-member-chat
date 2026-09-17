@@ -453,13 +453,14 @@ Bundle-Config und werden dem Provider als Konstruktor-Argument gereicht.
 | `member_groups` | Alle aktiven Mitglieder aus konfigurierten Gruppen | `groups: [int]` |
 | `shared_groups` | Alle aktiven Mitglieder, die mindestens eine Gruppe mit dem Suchenden teilen | keine |
 
-Beide filtern `disable = ''`, `login = '1'` sowie `start`/`stop`, suchen
-in `firstname`, `lastname`, `username` (Prefix-Match, `LIKE 'q%'`) und
-begrenzen auf `limit`. Die Gruppenzugehörigkeit steht in `tl_member.groups`
-serialisiert; für den Gruppenfilter sind daher entweder ein `LIKE` auf die
-serialisierte Form oder ein Nachfiltern in PHP nötig. Das ist bei
-Mitgliederzahlen im Vereins- oder Intranet-Maßstab vertretbar und wird im
-Gateway gekapselt, damit es später austauschbar bleibt.
+Beide filtern `disable = 0`, `login = 1` (in Contao 5.7 Boolean-Spalten)
+sowie `start`/`stop`, suchen in `firstname`, `lastname`, `username`
+(Prefix-Match mit escaptem `LIKE`) und begrenzen auf `limit`. Die
+Gruppenzugehörigkeit steht in `tl_member.groups` serialisiert; das
+`ContactGateway` filtert Aktivität und Prefix per SQL und die Gruppen per
+PHP-Nachfilter nach `StringUtil::deserialize`, das Limit greift danach.
+Das ist bei Mitgliederzahlen im Vereins- oder Intranet-Maßstab vertretbar
+und im Gateway gekapselt, damit es später austauschbar bleibt.
 
 Projekte ergänzen eigene Provider (etwa „gleicher Verein", „gleiches
 Team") durch eine Klasse, die das Interface implementiert. Autoconfigure
@@ -620,14 +621,15 @@ per Turbo-Stream `append`. Das Polling der Liste lädt weiterhin nur die
 erste Seite voll neu; nachgeladene Einträge bleiben stehen, weil der
 Listen-Frame nach einem Nachladen wie der Nachrichten-Frame in den
 inkrementellen Modus wechselt. Da neue Aktivität eine Konversation nach
-oben schiebt, liefert der inkrementelle Poll der Liste alle Einträge mit
-`lastMessageAt` **größer oder gleich** dem zuletzt bekannten Stand,
-ohne Seitenbegrenzung (Phase 1: Sekundenauflösung der Zeitstempel, ein
-striktes `>` könnte Aktivität derselben Sekunde verlieren). Das Skript
-muss deshalb per UUID upserten: alten Eintrag derselben UUID entfernen,
-neuen oben einfügen. Offen für Phase 3: `since` reagiert nur auf
-Nachrichtenaktivität, nicht auf Lesestand- oder Stumm-Änderungen aus
-einem anderen Tab; siehe Abschnitt 15.
+oben schiebt, liefert der inkrementelle Poll der Liste alle Einträge,
+deren `changedAt` **größer oder gleich** dem zuletzt bekannten Stand ist,
+ohne Seitenbegrenzung (Sekundenauflösung der Zeitstempel, ein striktes
+`>` könnte Aktivität derselben Sekunde verlieren). `changedAt` ist
+`GREATEST(c.lastMessageAt, p.tstamp)` der eigenen Teilnehmerzeile; damit
+schlagen auch Lesestand- und Stumm-Änderungen aus einem anderen Tab in
+der Liste durch (Entscheidung 15). Das Skript upsertet per UUID: alten
+Eintrag derselben UUID entfernen, neuen an der Position einfügen, die
+`lastMessageAt` vorgibt.
 
 ### 5.4 Kontaktsuche
 
@@ -1069,6 +1071,11 @@ den Abschnitt, in dem die Entscheidung eingearbeitet ist.
    `ContactService` übernimmt Selbstausschluss, Normalisierung, Limit und
    Dubletten zentral; Asymmetrie von `canContact` ist erlaubt und
    dokumentiert; `getAlias()` bleibt statisch. Details in 4.1 und 4.2a.
+15. **Listen-Poll und Fremdänderungen.** Entschieden 2026-09-17 für
+   Phase 3a: `since` vergleicht gegen `GREATEST(c.lastMessageAt, p.tstamp)`
+   der eigenen Teilnehmerzeile (`changedAt` im `ConversationListItem`),
+   damit Lesestand- und Stumm-Änderungen aus anderen Tabs die Liste
+   aktualisieren. Kein periodischer Voll-Reload. Details in 5.3a.
 
 ---
 
@@ -1134,4 +1141,21 @@ Entscheidungen verlangen:
 | Gateways | `final` hinter `*GatewayInterface` für Mocks | Provider und Resolver in Phase 2 folgen demselben Muster |
 | Integrationstests | eigene Datenbank `member_chat_test`, nur die drei Chat-Tabellen werden aufgebaut | Phase 2 muss eine minimale `tl_member` für Provider-Tests ergänzen |
 | Hilfsskript | `.docs/build/verify-host.php` prüft Paletten und Übersetzungen im Host | In Phase 4 nach `tools/` verschieben oder durch einen Integrationstest ersetzen |
+
+### Erkenntnisse aus Phase 2
+
+Abgeschlossen 2026-09-17, drei Commits, Bericht unter
+`.docs/build/reports/phase-2-contacts.md`.
+
+| Thema | Stand nach Phase 2 | Folge |
+| --- | --- | --- |
+| Öffentliche Kontakt-API | `ContactService::search(string, ?int)` und `canContact(int)` holen die Identität selbst; `ContactService::viewer()` baut den `Viewer` einmal pro Hauptrequest (`WeakMap` auf dem Request) | Controller übergeben nie eine fremde Mitglieds-ID als Viewer |
+| Anzeige | `ContactResolver::resolveMany()` liefert eine Map je angefragter ID, Platzhalter mit `memberId = 0` und Übersetzung `MSC.member_chat.deleted_member`; inaktive Mitglieder werden für bestehende Verläufe weiterhin aufgelöst | Templates erhalten nie `null` |
+| Avatare | Einzeln über `fromUuid()->buildIfResourceExists()`, im Batch über eine `FilesModel::findMultipleByUuids()`-Abfrage und `fromFilesModel()`; URL aus `Figure::getImage()->getImageSrc()` | Batch-Variante liefert keinen `subtitle`; Provider mit Untertitel bauen `Contact` selbst oder ergänzen den Wert nachträglich |
+| Avatar-Spalte | `ContactGateway::displayColumns()` prüft bei konfiguriertem `avatar_field` per Schema-Introspektion, ob die Spalte existiert, und zwar bei jeder Abfrage | Phase 3a memoisiert das Ergebnis pro Prozess; Introspektion pro Request ist zu teuer |
+| Mitgliederfilter | `disable = 0`, `login = 1`, `start`/`stop` mit Integer-Parametern; aktive Viewer-Gruppen gegen `tl_member_group` mit Minutenauflösung | Konzeptabschnitt 4.4 korrigiert |
+| Registry | Compiler-Pass prüft unbekannte und doppelte Aliase beim Container-Build, wie im Konzept gefordert | Keine Abweichung |
+| Rate-Limiter | Existenzprüfung liegt jetzt vor dem Token-Verbrauch | Erledigt |
+| Testdatenbank | Fixtures für `tl_member` und `tl_member_group` in `tests/DatabaseTestCase.php` | Phase 3 nutzt dieselbe Basis für Controller-nahe Tests |
+| Framework-Adapter | `Adapter::__call('findMultipleByUuids', …)` explizit statt magischem Aufruf, wegen PHPStan-Strict-Regel zu dynamischen statischen Aufrufen | Kandidat für eine Aufräumrunde, sobald ein sauberer Weg gefunden ist |
 
