@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Contao\Rector\Set\ContaoLevelSetList;
 use Contao\Rector\Set\ContaoSetList;
 use Rector\Config\RectorConfig;
 use Rector\Php81\Rector\Array_\ArrayToFirstClassCallableRector;
@@ -39,7 +38,14 @@ return RectorConfig::configure()
 
     ->withSets([
         LevelSetList::UP_TO_PHP_84,
-        ContaoLevelSetList::UP_TO_CONTAO_57,
+        // UP_TO_CONTAO_57 references Symfony constants removed in current Rector.
+        // Expand its Contao rules here; PHP 8.4 and Composer-based Symfony/Doctrine
+        // sets above retain the dependency migration coverage.
+        ContaoSetList::CONTAO_49,
+        ContaoSetList::CONTAO_413,
+        ContaoSetList::CONTAO_50,
+        ContaoSetList::CONTAO_51,
+        ContaoSetList::CONTAO_53,
         ContaoSetList::FQCN,
         ContaoSetList::ANNOTATIONS_TO_ATTRIBUTES,
     ])
@@ -49,8 +55,8 @@ return RectorConfig::configure()
         codingStyle: true,
         typeDeclarations: true,
         privatization: true,
-        earlyReturn: true,
         instanceOf: true,
+        earlyReturn: true,
         phpunitCodeQuality: true,
         symfonyCodeQuality: true,
         symfonyConfigs: true,

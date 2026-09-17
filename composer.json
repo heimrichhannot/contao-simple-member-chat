@@ -1,0 +1,46 @@
+{
+    "name": "heimrichhannot/contao-simple-member-chat",
+    "description": "Private one-to-one text conversations for Contao frontend members.",
+    "type": "contao-bundle",
+    "license": "LGPL-3.0-or-later",
+    "require": {
+        "php": "^8.4",
+        "contao/core-bundle": "^5.7",
+        "contao/manager-plugin": "^2.13",
+        "doctrine/dbal": "^3.10",
+        "symfony/rate-limiter": "^7.4",
+        "symfony/uid": "^7.4"
+    },
+    "require-dev": {
+        "contao/test-case": "^5.0",
+        "phpunit/phpunit": "^12.0",
+        "symplify/easy-coding-standard": "^12.0",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-symfony": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "rector/rector": "^2.0",
+        "contao/contao-rector": "dev-main"
+    },
+    "autoload": {
+        "psr-4": {
+            "HeimrichHannot\\SimpleMemberChatBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "HeimrichHannot\\SimpleMemberChatBundle\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "contao-manager-plugin": "HeimrichHannot\\SimpleMemberChatBundle\\ContaoManager\\Plugin"
+    },
+    "config": {
+        "allow-plugins": {
+            "contao/manager-plugin": true,
+            "php-http/discovery": false,
+            "contao-components/installer": false
+        },
+        "sort-packages": true
+    }
+}

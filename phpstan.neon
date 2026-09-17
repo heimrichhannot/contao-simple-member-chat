@@ -8,7 +8,7 @@ parameters:
     excludePaths:
         # DCA files are plain arrays on $GLOBALS and produce no useful findings.
         - contao/dca
-        - contao/config
+        - contao/config (?)
     treatPhpDocTypesAsCertain: false
     reportUnmatchedIgnoredErrors: true
     universalObjectCratesClasses:

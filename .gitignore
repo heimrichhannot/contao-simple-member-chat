@@ -6,3 +6,5 @@ AGENTS.local.md
 /.ecs_cache/
 /.rector_cache/
 /.phpunit.cache/
+/vendor/
+/composer.lock

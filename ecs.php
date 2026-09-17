@@ -40,15 +40,9 @@ return ECSConfig::configure()
 
     ->withPreparedSets(
         psr12: true,
+        // Common already includes arrays, comments, docblocks, spaces, namespaces, control structures and PHPUnit.
         common: true,
         strict: true,
-        arrays: true,
-        comments: true,
-        docblocks: true,
-        spaces: true,
-        namespaces: true,
-        controlStructures: true,
-        phpunit: true,
     )
     ->withPhpCsFixerSets(
         symfony: true,
@@ -69,5 +63,7 @@ return ECSConfig::configure()
             // Bundle class and Manager plugin must stay extendable by Contao.
             'src/*Bundle.php',
             'src/ContaoManager/*',
+            // Domain exception base is extended by AuthenticationRequiredException.
+            'src/Exception/ChatException.php',
         ],
     ]);
