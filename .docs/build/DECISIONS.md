@@ -102,3 +102,67 @@ Phase 1 decisions above remain the historical record.
   is revoked or the member's limiter is exhausted.
 - No host application source, DCA schema, routes, controllers, templates,
   JavaScript, content element or backend module was changed in phase 2.
+
+## Phase 3a
+
+Verified on 2026-09-17 against the bundle's Contao 5.7.13 / Symfony 7.4 /
+Twig 3.28 vendor tree. Paths are relative to the bundle unless labelled
+**host** (`/home/dev/Kunden/contao/contao_0507`). Phase 3b is not implemented.
+
+| Central choice | Vendor evidence |
+| --- | --- |
+| Attribute content element, backend-only editor hint, current page and fragment response | `vendor/contao/core-bundle/src/DependencyInjection/Attribute/AsContentElement.php`; `src/Controller/ContentElement/AbstractContentElementController.php`; `src/Controller/AbstractFragmentController.php::{getPageModel,isBackendScope,createTemplate}` |
+| Consume `auto_item`, including anonymous visits, before Contao's unused-parameter check | `vendor/contao/core-bundle/contao/library/Contao/Input.php::get()` defaults its third parameter to false. `ConversationAccess::fromItem()` uses the framework adapter's explicit `__call('get', ['auto_item'])`, matching phase 2's strict-PHPStan adapter convention. Anonymous visits consume the item but perform no conversation lookup |
+| UUID syntax before lookup; voter after `findByUuid` | `vendor/symfony/uid/Uuid.php`; `vendor/symfony/security-core/Authorization/AuthorizationCheckerInterface.php`; `vendor/contao/core-bundle/src/Exception/{PageNotFoundException,NotFoundException}.php`. The public syntax is the concept's lower-case RFC 4122 notation |
+| Attribute routes with frontend scope and CSRF checks | `vendor/symfony/routing/Attribute/Route.php`; `vendor/contao/core-bundle/src/EventListener/RequestTokenListener.php`. The actual field is **REQUEST_TOKEN**, supplied by `src/Csrf/ContaoCsrfTokenManager.php::getDefaultTokenValue()`. `_token_check: true` stays on both POST routes; no custom token validation |
+| Page URL helper uses inherited page details and `parameters: /<uuid>` | `vendor/contao/core-bundle/contao/models/PageModel.php::findWithDetails()` calls `loadDetails()`; `src/Routing/ContentUrlGenerator.php::generate()`; `src/Routing/Content/ArticleResolver.php` demonstrates `parameters`; service ID in `config/services.yaml`. `ChatPageUrlGenerator` validates a regular page before a write, supplies an explicit empty parameter for the back link, and is the extension point for phase 4's fallback policy |
+| Turbo cache meta works in **both** layout types through `HtmlHeadBag` | `vendor/contao/core-bundle/src/Controller/AbstractController.php::getHtmlHeadBag()`; `src/Routing/ResponseContext/HtmlHeadBag/HtmlHeadBag.php::{removeMetaTag,addMetaTag}`; `src/String/HtmlAttributes.php`. Legacy `contao/pages/PageRegular.php` assigns `getMetaTags()` and `contao/templates/frontend/fe_page.html5` renders them. Modern `contao/templates/twig/page/layout.html.twig` reads `response_context.head.metaTags` in a deferred block. Both were verified in rendered HTTP responses. No `TL_HEAD` workaround or remaining meta gap |
+| Private content-element response reaches the complete page | `vendor/contao/core-bundle/src/EventListener/SubrequestCacheSubscriber.php` merges fragment cache policy; actual legacy and modern pages return `must-revalidate, no-cache, no-store, private` |
+| All endpoint responses, including kernel errors, prohibit storage | `vendor/symfony/http-foundation/{Response,ResponseHeaderBag}.php`; `vendor/symfony/http-kernel/Event/ResponseEvent.php`; `vendor/symfony/event-dispatcher/Attribute/AsEventListener.php`. `ChatResponseListener` is limited to main requests below `/_member_chat/`, priority -1016, after Contao's -1012 private-response listener. This covers CSRF and routing exceptions outside the controller. `TurboResponseFactory` supplies the normal HTML/stream headers and `Vary: Accept` |
+| Attribute Twig runtime, safe escaping before linking | `vendor/twig/twig/src/Attribute/AsTwigFilter.php`; `vendor/symfony/twig-bundle/DependencyInjection/TwigExtension.php`; `DependencyInjection/Compiler/AttributeExtensionPass.php` adds both the attribute extension and `twig.runtime` for non-static methods. The filter splits raw text, escapes every part and constructs only http/https anchors. Templates apply `nl2br` afterwards; no `raw` filter or Markdown |
+| Page timestamp format on full pages and fragment requests | `vendor/contao/core-bundle/src/Twig/Global/ContaoVariable.php::getDatim_format()` reads `PageModel::datimFormat`; `contao/models/PageModel.php::loadDetails()` inherits it. Every frame URL/form carries the current page ID; `ChatContextFactory` supplies its resolved `datimFormat`, so standalone fragment routes need no ambient current page |
+| Extensible attribute objects and template namespace | `vendor/contao/core-bundle/src/String/HtmlAttributes.php::{set,addClass,mergeWith}`; `contao/templates/twig/content_element/_base.html.twig`; `src/Twig/Loader/TemplateLocator.php`. All partial roots/frames and stream roots expose merge attributes |
+| Type and category share the requested `member_chat` key | `vendor/contao/core-bundle/contao/library/Contao/Widget.php::getAttributesFromDca()` uses element zero for both array-valued group references and options. `CTE.member_chat.0` therefore translates both; `.1` supplies help without a conflicting scalar `CTE.member_chat` |
+| Encore entry and automatic activation | `vendor/heimrichhannot/contao-encore-contracts/{EncoreEntry,EncoreExtensionInterface,PageAssetsTrait,AddPageEntrypointTrait}.php` (1.5.0). **Host:** `vendor/heimrichhannot/contao-encore-bundle/src/DependencyInjection/EncoreExtension.php` autoconfigures the interface; `src/Asset/FrontendAsset.php` registers entries in the response context. Legacy layouts must have Encore enabled. Turbo remains project-provided |
+| Turbo full reload, streams and redirect/focus lifecycle | **Host:** `node_modules/@hotwired/turbo/dist/turbo.es2017-esm.js`: `FrameElement::reload`, `FrameController::sourceURLReloaded`, `FetchResponse::{succeeded,redirected,location}`, stream rendering and `turbo:before-frame-render`/`turbo:before-stream-render` events. `reload()` returns `element.loaded`, not a FetchResponse; completion is checked on the frame. No second Turbo import |
+
+### Contracts and corrections
+
+- `ConversationListItem::changedAt` is `GREATEST(lastMessageAt, viewer.tstamp)`.
+  `since` remains inclusive and unbounded. An independent DB connection proves
+  read and mute changes surface without changing message activity time.
+- A changed conversation does **not** necessarily move to the top: a read or mute
+  change alters only participant time. Responses use remove + prepend streams;
+  the client then sorts present items by `lastMessageAt` descending and UUID
+  descending for equal timestamps. UUID provides a stable public tie-breaker;
+  the gateway retains its existing integer-ID tie-breaker. Equal-time ordering
+  may therefore differ after a poll, but message-time ordering is preserved and
+  internal conversation IDs never reach the template. Phase 3b must preserve
+  this ordering when adding older items.
+- Initial messages are already rendered. Their frame records incremental mode
+  and its delivered cursor; Turbo's initial `src` request refreshes that state.
+  Full reload support remains available through `frame.reload()`. The client
+  copies cursor attributes explicitly because Turbo retains the outer frame.
+- Message polls return `X-Chat-After` and `X-Chat-Count`; list polls return
+  `X-Chat-Since`. The client drains full message pages. Successful send streams
+  **do not advance** the polling cursor: another member's earlier unseen message
+  could otherwise be skipped. Turbo's append behavior deduplicates direct child
+  message elements with matching IDs; this is append replacement, not morphing.
+- An empty poll calls `markRead` with zero, preserving the stored monotonic read
+  position while refreshing activity/page tracking. Client `after` is never
+  treated as proof that a message was delivered.
+- `ChatReader` owns read-window orchestration and delegates writes to `ReadTracker`.
+  View mapping itself is side-effect-free. Initial list/partner/author display
+  uses one combined `ContactResolver::resolveMany()` call, not separate row calls.
+- Public template objects: `ChatView` has `conversations`, `messages`, `partner`,
+  `lastMessageId`, `changedAt`; `ConversationItemView` has `uuid`, `partner`,
+  `url`, `excerpt`, `lastMessageAt`, `changedAt`, `unreadCount`, `muted`;
+  `MessageView` has `id`, `author`, `body`, `createdAt`, `own`, `readByPartner`.
+  `message_status` stays empty. Context also provides page/route URLs, options,
+  CSRF token, page time format and form values. Full README documentation is phase 4.
+- Contact-start forms target `chat-search` for validation errors. A successful
+  redirected response is promoted to `Turbo.visit()`; ordinary list/back links
+  explicitly opt into Drive. No mute, badge or history-loading route was added.
+- Avatar display-column metadata, including a missing configured field, is
+  memoized on the gateway instance for its process lifetime. The gateway's
+  dependencies remain readonly; only the private cached projection is mutable.
