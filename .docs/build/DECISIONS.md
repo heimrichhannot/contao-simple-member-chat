@@ -288,3 +288,54 @@ The checklist's old phase-3c pending text was superseded by the later reviewer
 verification in concept section 15. Preserve that provenance; phase 4 automation
 does not amount to another browser pass. Exact commands, failed intermediate
 checks and final outputs are in the phase 4 report.
+
+## Phase 4b
+
+Scope: only polling lifecycle recovery and visibility starvation. No server,
+view, cursor, data-attribute or host application code changes.
+
+Verified against **host** `/home/dev/Kunden/contao/contao_0507/node_modules/@hotwired/turbo`,
+package version **8.0.23**, `dist/turbo.es2017-esm.js`:
+
+- `PageObserver.start()` (lines 4979–4987) registers `pagehide`;
+  `pageWillUnload` (5023–5025) delegates to Session. Session's
+  `pageWillUnload()` (5998–6000) only relinquishes scroll restoration.
+  Contrary to the prompt's causal explanation, this installed implementation
+  does **not** dispatch `turbo:before-cache` from `pagehide`.
+- `Session.viewWillCacheSnapshot()` (6010–6012) calls
+  `notifyApplicationBeforeCachingSnapshot()` (6082–6084), dispatching
+  `turbo:before-cache`. `PageView.cacheSnapshot()` calls that delegate before
+  cloning a cacheable snapshot. Retain that teardown and additionally attach
+  it directly to native `pagehide` for browser-cache suspension.
+- `Session.viewRenderedSnapshot()` (6028–6031) dispatches `turbo:render`
+  through `notifyApplicationAfterRender()` (6093–6095). `turbo:load` is emitted
+  separately by `notifyApplicationAfterPageLoad()` (6097–6101), including the
+  initial interactive-page path. There is no installed `pageshow` listener.
+  The client therefore listens directly to native `pageshow` (both persisted
+  values), visible `visibilitychange`, and `turbo:render`, as well as the
+  existing `turbo:load`/DOMContentLoaded signals.
+
+`start()` reuses active observers/timers and only discovers new frames when
+already running. Teardown clears timers, disconnects observers, aborts owned
+fetches and clears the frame map as before. Late frame events cannot rediscover
+frames while inactive. A WeakSet prevents duplicate scroll listeners on the
+same restored element. Request completion checks its original state identity
+so an old request cannot reset the timer or advance a cursor after restart.
+Turbo-owned frame reloads retain Turbo's own request management and busy guard.
+
+Each frame keeps an internal `dueAt` deadline. Visibility changes clear or
+reschedule the timeout without replacing that deadline; elapsed hidden time
+counts, and overdue visible frames wait zero milliseconds. Completed requests
+start the next interval using the existing capped exponential failure backoff.
+Invisible or busy frames retry after another interval to avoid a zero-delay
+loop. Loading frames rely on request completion to schedule their next poll.
+A full lifecycle teardown still discards frame state; a restored frame starts
+its configured interval, while ordinary visibility pauses retain the remainder.
+No extra public data attributes are introduced.
+
+The deterministic DDEV client harness fails against the original implementation
+for both requested defects, then passes with the fixes. It also covers repeated
+restart signals, native pagehide, late completion, hidden/invisible/busy frames,
+backoff cap and reset. Browser bfcache/device acceptance is **not verified**;
+see the exact reproductions in `../BROWSER_CHECKLIST.md` and captured commands
+in `reports/phase-4b-polling-resilience.md`.
