@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Contao\Rector\Set\ContaoSetList;
 use Rector\Config\RectorConfig;
 use Rector\Php81\Rector\Array_\ArrayToFirstClassCallableRector;
+use Rector\PHPUnit\CodeQuality\Rector\Class_\PreferPHPUnitThisCallRector;
 use Rector\Set\ValueObject\LevelSetList;
 use Rector\ValueObject\PhpVersion;
 
@@ -64,6 +65,8 @@ return RectorConfig::configure()
 
     ->withSkip([
         ArrayToFirstClassCallableRector::class,
+        // PHPStan strict rules require static PHPUnit APIs to be called statically.
+        PreferPHPUnitThisCallRector::class,
         // DCA files and config.php are procedural Contao resources.
         __DIR__ . '/contao/dca',
         __DIR__ . '/contao/config',
