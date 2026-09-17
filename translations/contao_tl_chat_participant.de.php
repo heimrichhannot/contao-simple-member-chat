@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 return [
-    'id.0' => 'ID',
-    'tstamp.0' => 'Geändert am',
-    'pid.0' => 'Konversation',
-    'member.0' => 'Mitglied',
-    'joinedAt.0' => 'Beigetreten am',
-    'lastReadAt.0' => 'Zuletzt gelesen am',
-    'lastReadMessageId.0' => 'Zuletzt gelesene Nachricht',
-    'lastPageId.0' => 'Letzte Chat-Seite',
-    'muted.0' => 'Stummgeschaltet',
+    'tl_chat_participant.id.0' => 'ID',
+    'tl_chat_participant.tstamp.0' => 'Geändert am',
+    'tl_chat_participant.pid.0' => 'Konversation',
+    'tl_chat_participant.member.0' => 'Mitglied',
+    'tl_chat_participant.joinedAt.0' => 'Beigetreten am',
+    'tl_chat_participant.lastReadAt.0' => 'Zuletzt gelesen am',
+    'tl_chat_participant.lastReadMessageId.0' => 'Zuletzt gelesene Nachricht',
+    'tl_chat_participant.lastPageId.0' => 'Letzte Chat-Seite',
+    'tl_chat_participant.muted.0' => 'Stummgeschaltet',
 ];

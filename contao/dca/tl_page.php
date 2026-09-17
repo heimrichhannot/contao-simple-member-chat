@@ -6,6 +6,7 @@ use Contao\CoreBundle\DataContainer\PaletteManipulator;
 
 $GLOBALS['TL_DCA']['tl_page']['fields']['memberChatPage'] = [
     'inputType' => 'pageTree',
+    'foreignKey' => 'tl_page.title',
     'eval' => [
         'fieldType' => 'radio',
         'tl_class' => 'clr',

@@ -58,50 +58,53 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
         ->end();
     }
 
-    /** @param array<string, mixed> $config */
+    /**
+     * @param array<mixed> $config
+     */
     public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
-    /**
-     * @var array{
-     *     contact_provider: string,
-     *     polling: array{messages_interval: int, conversations_interval: int, badge_interval: int, max_interval_multiplier: int},
-     *     message: array{max_length: int, rate_limit: int, rate_limiter: ?string},
-     *     list: array{page_size: int, search_limit: int, search_min_length: int},
-     *     contact: array{avatar_field: ?string, avatar_size: int|array{int, int, string}},
-     *     providers: array<string, mixed>
-     * } $config
-     */
+        /**
+         * @var array{
+         *     contact_provider: string,
+         *     polling: array{messages_interval: int, conversations_interval: int, badge_interval: int, max_interval_multiplier: int},
+         *     message: array{max_length: int, rate_limit: int, rate_limiter: ?string},
+         *     list: array{page_size: int, search_limit: int, search_min_length: int},
+         *     contact: array{avatar_field: ?string, avatar_size: int|array{int, int, string}},
+         *     providers: array<string, mixed>
+         * } $options
+         */
+        $options = $config;
         $configurator->import('../config/services.yaml');
-        foreach ($config as $name => $value) {
+        foreach ($options as $name => $value) {
             $container->setParameter('contao_member_chat.' . $name, $value);
         }
 
         $container->setDefinition(ChatOptions::class, new Definition(ChatOptions::class, [
-            '$contactProvider' => $config['contact_provider'],
-            '$messagesInterval' => $config['polling']['messages_interval'],
-            '$conversationsInterval' => $config['polling']['conversations_interval'],
-            '$badgeInterval' => $config['polling']['badge_interval'],
-            '$maxIntervalMultiplier' => $config['polling']['max_interval_multiplier'],
-            '$maxLength' => $config['message']['max_length'],
-            '$rateLimit' => $config['message']['rate_limit'],
-            '$rateLimiter' => $config['message']['rate_limiter'],
-            '$pageSize' => $config['list']['page_size'],
-            '$searchLimit' => $config['list']['search_limit'],
-            '$searchMinLength' => $config['list']['search_min_length'],
-            '$avatarField' => $config['contact']['avatar_field'],
-            '$avatarSize' => $config['contact']['avatar_size'],
-            '$providers' => $config['providers'],
+            '$contactProvider' => $options['contact_provider'],
+            '$messagesInterval' => $options['polling']['messages_interval'],
+            '$conversationsInterval' => $options['polling']['conversations_interval'],
+            '$badgeInterval' => $options['polling']['badge_interval'],
+            '$maxIntervalMultiplier' => $options['polling']['max_interval_multiplier'],
+            '$maxLength' => $options['message']['max_length'],
+            '$rateLimit' => $options['message']['rate_limit'],
+            '$rateLimiter' => $options['message']['rate_limiter'],
+            '$pageSize' => $options['list']['page_size'],
+            '$searchLimit' => $options['list']['search_limit'],
+            '$searchMinLength' => $options['list']['search_min_length'],
+            '$avatarField' => $options['contact']['avatar_field'],
+            '$avatarSize' => $options['contact']['avatar_size'],
+            '$providers' => $options['providers'],
         ]));
 
         $limiterId = 'contao_member_chat.rate_limiter';
-        if ($config['message']['rate_limiter'] !== null) {
-            $container->setAlias($limiterId, 'limiter.' . $config['message']['rate_limiter']);
+        if ($options['message']['rate_limiter'] !== null) {
+            $container->setAlias($limiterId, 'limiter.' . $options['message']['rate_limiter']);
         } else {
             $container->setDefinition($limiterId, new Definition(RateLimiterFactory::class, [
                 [
                     'id' => $limiterId,
                     'policy' => 'sliding_window',
-                    'limit' => $config['message']['rate_limit'],
+                    'limit' => $options['message']['rate_limit'],
                     'interval' => '1 minute',
                 ],
                 new Definition(CacheStorage::class, [new Reference('cache.app')]),
