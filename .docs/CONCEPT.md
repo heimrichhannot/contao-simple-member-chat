@@ -1266,3 +1266,53 @@ erst jetzt aufgefallen:**
 | `turbo:before-cache` stoppt das Polling dauerhaft | Nach vollem Seitenaufbau 3 Polls in 9 s. Danach `turbo:before-cache` ohne Navigation ausgelöst: 0 Polls in 10 s. Weder `pageshow` noch `visibilitychange` stellen den Betrieb wieder her, nur ein vollständiger Seitenaufbau | Der Handler setzt `active = false` und leert die Frame-Liste; nur `turbo:load` baut beides wieder auf. Turbo feuert das Ereignis auch bei `pagehide`. Nach einer Zurück-Navigation aus dem bfcache oder beim Ausblenden in eingebetteten und mobilen Browsern steht der Chat still: keine neuen Nachrichten, kein Badge, ohne jeden Hinweis für den Nutzer |
 | `visibilitychange` startet jedes Intervall neu | Badge mit 30 s Intervall pollte in 38 s kein einziges Mal, während die Sichtbarkeit mehrfach wechselte; derselbe Badge mit 2 s Intervall pollte normal. Liste (15 s) und Verlauf (4 s) liefen weiter | `schedule()` verwirft beim Sichtbarkeitswechsel die Restlaufzeit und beginnt das volle Intervall von vorn. Wer häufig den Tab wechselt, bekommt bei langen Intervallen nie eine Aktualisierung; der Badge ist genau der Fall |
 
+### Erkenntnisse aus Phase 4b
+
+Abgeschlossen 2026-09-17, zwei Codex-Commits. Beide Polling-Fehler aus
+Phase 4 sind behoben und im Browser nachgemessen.
+
+| Fehler | Messung vorher | Messung nachher |
+| --- | --- | --- |
+| `turbo:before-cache` stoppt das Polling | 0 Abfragen in 10 s, keine Erholung durch `pageshow` oder `visibilitychange` | Nach `turbo:before-cache` und `pageshow` ohne Navigation 2 Abfragen in 9 s |
+| `visibilitychange` startet das Intervall neu | Badge mit 30 s pollte in 38 s kein einziges Mal | Badge mit 30 s pollte in 36 s trotz fünf Sichtbarkeitswechseln einmal; Frame vollständig geladen |
+
+Die Lösung führt `dueAt` je Frame ein: Der Fälligkeitszeitpunkt überlebt
+Sichtbarkeitswechsel, das Intervall wird nicht neu gestartet. Der Abbau
+läuft jetzt auch bei `pagehide`, der Aufbau zusätzlich bei `pageshow`,
+`turbo:render` und beim Wechsel auf sichtbar; `start()` ist idempotent.
+Zwei Regressionstests unter `.docs/build/verify-phase-4b-client.cjs`
+schlagen gegen den alten Stand fehl.
+
+**Messhinweis für künftige Prüfungen:** Ist das Browser-Panel der
+Desktop-App ausgeblendet, meldet die Seite `document.hidden` und der Chat
+pausiert bestimmungsgemäß. Messungen zum Polling sind dann wertlos. Das
+Panel muss während der Messung sichtbar bleiben, etwa durch regelmäßige
+Screenshots.
+
+---
+
+## 16. Stand der Umsetzung
+
+| Phase | Inhalt | Stand |
+| --- | --- | --- |
+| 1 Fundament | Paket, Konfiguration, Schema, Domain, Gateways, Services, Events, Voter, Mitgliedslöschung | abgeschlossen |
+| 2 Kontakte | Viewer, Contact, Factory, Resolver, Service, Provider, Registry | abgeschlossen |
+| 3a Frontend-Kern | Content-Element, Routen, Views, Templates, Streams, Polling | abgeschlossen |
+| 3b Frontend-Ausbau | Nachladen, Stummschalten, Zeitformat, Scroll-Verhalten, Barrierefreiheit | abgeschlossen |
+| 3c Fixes | fünf Befunde aus dem Browser-Review | abgeschlossen |
+| 4 Rand | Backend, Badge, URL-Auflösung, stabile API, README | abgeschlossen |
+| 4b Polling-Robustheit | zwei Lebenszyklus-Fehler im Skript | abgeschlossen |
+| 5 Brücke | eigenes Paket `contao-member-chat-pwa` mit Push-Listener | offen, eigenes Repository |
+
+Offen außerhalb der Phasen:
+
+* Die Backend-Oberfläche ist nicht im Browser geprüft, dafür ist eine
+  Backend-Anmeldung nötig. Registrierung, Listen und Callbacks sind über
+  den Host-Smoke-Test und Integrationstests belegt.
+* Die Root-Seite des DDEV-Demos wurde von `contao0507.contao.hhdev` auf
+  eine leere Domain umgestellt, damit das Browser-Panel der Desktop-App
+  sie über `https://127.0.0.1:<port>` erreicht. Für den Dauerbetrieb
+  entweder zurücksetzen oder `host_https_port` im DDEV-Projekt fixieren.
+* `.docs/BROWSER_CHECKLIST.md` listet, was nur auf echten Geräten prüfbar
+  bleibt: iOS- und Android-Tastatur, Standalone-PWA, Screenreader.
+
