@@ -93,7 +93,10 @@ final class ServicesTest extends ServiceTestCase
         $permission->expects(self::never())->method('canContact');
         $this->conversations->method('findByPair')->willReturn($this->conversation());
         $this->conversations->expects(self::never())->method('insert');
-        self::assertSame(1, $this->conversationService($permission)->openWith(9, 7)->id);
+        $limiter = $this->limiter(1);
+        self::assertSame(1, $this->conversationService($permission, $limiter)->openWith(9, 7)->id);
+        self::assertTrue($limiter->create('9')->consume()->isAccepted());
+        self::assertSame(1, $this->conversationService($permission, $limiter)->openWith(9, 7)->id);
     }
 
     public function testDeniedContactDoesNotWrite(): void
@@ -221,9 +224,9 @@ final class ServicesTest extends ServiceTestCase
         ], new InMemoryStorage());
     }
 
-    private function conversationService(ContactPermissionInterface $permission): ConversationService
+    private function conversationService(ContactPermissionInterface $permission, ?RateLimiterFactory $limiter = null): ConversationService
     {
-        return new ConversationService($this->conversations, $this->participants, $permission, $this->memberProvider(9), $this->limiter(), new ChatTransaction($this->connection), new ChatEventDispatcher($this->dispatcher, new NullLogger()));
+        return new ConversationService($this->conversations, $this->participants, $permission, $this->memberProvider(9), $limiter ?? $this->limiter(), new ChatTransaction($this->connection), new ChatEventDispatcher($this->dispatcher, new NullLogger()));
     }
 
     private function messageService(?RateLimiterFactory $limiter = null): MessageService

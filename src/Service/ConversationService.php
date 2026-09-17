@@ -35,15 +35,15 @@ final readonly class ConversationService
             throw new ChatException('member_chat.contact_denied', 403);
         }
 
-        if (!$this->rateLimiter->create((string) $initiatorId)->consume()->isAccepted()) {
-            throw new ChatException('member_chat.rate_limited', 429);
-        }
-
         $low = min($initiatorId, $memberId);
         $high = max($initiatorId, $memberId);
         $existing = $this->conversations->findByPair($low, $high);
         if ($existing instanceof Conversation) {
             return $existing;
+        }
+
+        if (!$this->rateLimiter->create((string) $initiatorId)->consume()->isAccepted()) {
+            throw new ChatException('member_chat.rate_limited', 429);
         }
 
         if (!$this->contactPermission->canContact($initiatorId, $memberId)) {
