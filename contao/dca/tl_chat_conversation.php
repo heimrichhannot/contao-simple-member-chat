@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Contao\DataContainer;
 use Contao\DC_Table;
 
 $GLOBALS['TL_DCA']['tl_chat_conversation'] = [
@@ -16,6 +17,26 @@ $GLOBALS['TL_DCA']['tl_chat_conversation'] = [
                 'uuid' => 'unique',
                 'memberLow,memberHigh' => 'unique',
                 'lastMessageAt' => 'index',
+            ],
+        ],
+    ],
+    'list' => [
+        'sorting' => [
+            'mode' => DataContainer::MODE_SORTED,
+            'fields' => ['lastMessageAt DESC'],
+            'panelLayout' => 'limit',
+        ],
+        'label' => [
+            'fields' => ['memberLow', 'memberHigh', 'lastMessageAt'],
+        ],
+        'operations' => [
+            'children' => [
+                'href' => 'table=tl_chat_message',
+                'icon' => 'children.svg',
+            ],
+            'delete' => [
+                'href' => 'act=delete',
+                'icon' => 'delete.svg',
             ],
         ],
     ],
