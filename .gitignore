@@ -3,3 +3,6 @@ Thumbs.db
 .DS_Store
 .sass-cache
 AGENTS.local.md
+/.ecs_cache/
+/.rector_cache/
+/.phpunit.cache/

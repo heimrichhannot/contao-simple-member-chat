@@ -56,9 +56,17 @@ ergänzt um `AGENTS.local.md` für die DDEV-Integrationsumgebung
   das: `PollingPolicy` aus dem QnA-Bundle wird nicht übernommen, wenn die
   Intervalle nur aus `ChatOptions` durchgereicht werden; Controller und
   Twig-Runtime lesen sie dann direkt aus `ChatOptions`.
-* Werkzeuge im Repository: ECS mit Symfony-Set (`ecs.php`), PHPStan
-  Level 1 mit Symfony-Extension (`phpstan.neon`), Rector mit Contao-Sets
-  (`rector.php`). Pfade derzeit nur `src/`; `contao/` ist auskommentiert.
+* Werkzeuge im Repository, auf Bundle-Stand gebracht am 2026-09-17:
+  ECS mit PSR-12, Symfony inkl. Risky, `strict`, `php84Migration`,
+  `declare(strict_types=1)` und `final` als Standard (`ecs.php`); PHPStan
+  `level: max` mit Symfony-, PHPUnit- und Strict-Rules-Extensions
+  (`phpstan.neon`); Rector mit `UP_TO_PHP_84`, `UP_TO_CONTAO_57`,
+  Attribut-Sets und den Prepared Sets für Dead Code, Code Quality,
+  Type Declarations, Privatization und Early Return (`rector.php`). Pfade
+  `config/`, `contao/`, `src/`, `tests/`; DCA- und `config.php`-Dateien
+  sind bei PHPStan und Rector ausgenommen, weil sie prozedurale
+  Contao-Ressourcen sind. Die Extensions `phpstan/phpstan-phpunit` und
+  `phpstan/phpstan-strict-rules` gehören zu den Dev-Abhängigkeiten.
 * Datenbankzugriff über Gateways, Geschäftslogik in Services, Controller
   bleiben dünn. Ob ein Gateway DBAL oder Contao-Models nutzt, entscheidet
   der Anwendungsfall: Listen, Joins und Zähler über die Chat-Tabellen per
@@ -970,8 +978,9 @@ Konstruktor.
 Dev-Abhängigkeiten: `contao/core-bundle:^5.7`, `contao/test-case`,
 `phpunit/phpunit:^12`, dazu die im Repository bereits konfigurierten
 Werkzeuge `symplify/easy-coding-standard`, `phpstan/phpstan` mit
-`phpstan/phpstan-symfony` und `rector/rector` mit `contao/contao-rector`;
-`phpunit.xml.dist` ist zu ergänzen.
+`phpstan/phpstan-symfony`, `phpstan/phpstan-phpunit` und
+`phpstan/phpstan-strict-rules` sowie `rector/rector` mit
+`contao/contao-rector`; `phpunit.xml.dist` ist zu ergänzen.
 
 ## 12a. Todo
 

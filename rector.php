@@ -6,27 +6,24 @@ use Contao\Rector\Set\ContaoLevelSetList;
 use Contao\Rector\Set\ContaoSetList;
 use Rector\Config\RectorConfig;
 use Rector\Php81\Rector\Array_\ArrayToFirstClassCallableRector;
-use Rector\Php84\Rector\Param\ExplicitNullableParamTypeRector;
 use Rector\Set\ValueObject\LevelSetList;
-use Rector\TypeDeclaration\Rector\ClassMethod\AddVoidReturnTypeWhereNoReturnRector;
 use Rector\ValueObject\PhpVersion;
 
 return RectorConfig::configure()
     ->withPaths([
+        __DIR__ . '/config',
+        __DIR__ . '/contao',
         __DIR__ . '/src',
-//        __DIR__ . '/contao',
-
+        __DIR__ . '/tests',
     ])
+    ->withRootFiles()
+    ->withParallel()
+    ->withCache(__DIR__ . '/.rector_cache')
     ->withPhpVersion(PhpVersion::PHP_84)
-    ->withRules([
-        AddVoidReturnTypeWhereNoReturnRector::class,
-        # In Vorbereitung für PHP 8.4:
-        ExplicitNullableParamTypeRector::class,
-    ])
 
     ->withImportNames(
         importShortClasses: false,
-        removeUnusedImports: true
+        removeUnusedImports: true,
     )
     ->withComposerBased(
         twig: true,
@@ -34,13 +31,35 @@ return RectorConfig::configure()
         phpunit: true,
         symfony: true,
     )
+    ->withAttributesSets(
+        symfony: true,
+        doctrine: true,
+        phpunit: true,
+    )
+
     ->withSets([
-        LevelSetList::UP_TO_PHP_74,
-        ContaoLevelSetList::UP_TO_CONTAO_49,
+        LevelSetList::UP_TO_PHP_84,
+        ContaoLevelSetList::UP_TO_CONTAO_57,
         ContaoSetList::FQCN,
         ContaoSetList::ANNOTATIONS_TO_ATTRIBUTES,
     ])
+    ->withPreparedSets(
+        deadCode: true,
+        codeQuality: true,
+        codingStyle: true,
+        typeDeclarations: true,
+        privatization: true,
+        earlyReturn: true,
+        instanceOf: true,
+        phpunitCodeQuality: true,
+        symfonyCodeQuality: true,
+        symfonyConfigs: true,
+    )
+
     ->withSkip([
         ArrayToFirstClassCallableRector::class,
+        // DCA files and config.php are procedural Contao resources.
+        __DIR__ . '/contao/dca',
+        __DIR__ . '/contao/config',
     ])
 ;
