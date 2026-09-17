@@ -65,7 +65,7 @@ final class ContactGateway implements ContactGatewayInterface
             '_' => '!_',
         ]) . '%';
         $now = time();
-        $rows = $this->connection->iterateAssociative('SELECT ' . $this->displayColumns() . ', `groups` FROM tl_member WHERE ' . self::ACTIVE . " AND (firstname LIKE ? ESCAPE '!' OR lastname LIKE ? ESCAPE '!' OR username LIKE ? ESCAPE '!') ORDER BY lastname, firstname, username, id", [$now, $now, $prefix, $prefix, $prefix], [ParameterType::INTEGER, ParameterType::INTEGER]);
+        $rows = $this->connection->iterateAssociative('SELECT ' . $this->displayColumns() . ', `groups` FROM tl_member WHERE ' . self::ACTIVE . " AND (firstname LIKE ? ESCAPE '!' OR firstname LIKE ? ESCAPE '!' OR lastname LIKE ? ESCAPE '!' OR lastname LIKE ? ESCAPE '!' OR username LIKE ? ESCAPE '!' OR username LIKE ? ESCAPE '!') ORDER BY lastname, firstname, username, id", [$now, $now, $prefix, '% ' . $prefix, $prefix, '% ' . $prefix, $prefix, '% ' . $prefix], [ParameterType::INTEGER, ParameterType::INTEGER]);
         $matches = [];
         foreach ($rows as $row) {
             if (array_intersect($groupIds, $this->groupIds($row['groups'])) === []) {

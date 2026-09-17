@@ -29,6 +29,7 @@ final readonly class ChatOptions
                 'groups' => [],
             ],
         ],
+        public int $activityThrottle = 30,
     ) {
     }
 }

@@ -116,6 +116,29 @@ final class ContactsTest extends DatabaseTestCase
         self::assertFalse(new SharedGroupsContactProvider($this->members, $this->factory, [])->canContact(new Viewer(99, []), 8));
     }
 
+    public function testWordPrefixesEscapeWildcardsAndDoNotMatchInsideWords(): void
+    {
+        $this->member(1, [
+            'firstname' => 'Chat Carol',
+        ]);
+        $this->member(2, [
+            'firstname' => 'Chat Scarol',
+        ]);
+        $this->member(3, [
+            'firstname' => 'Chat Ca%rol',
+        ]);
+        $this->member(4, [
+            'firstname' => 'Chat Ca_rol',
+        ]);
+        $this->member(5, [
+            'firstname' => 'Chat Ca!rol',
+        ]);
+        self::assertSame([1], array_column($this->members->search([2], 'Car', 20), 'id'));
+        self::assertSame([3], array_column($this->members->search([2], 'Ca%', 20), 'id'));
+        self::assertSame([4], array_column($this->members->search([2], 'Ca_', 20), 'id'));
+        self::assertSame([5], array_column($this->members->search([2], 'Ca!', 20), 'id'));
+    }
+
     public function testMemberTimeBoundaries(): void
     {
         $now = time();

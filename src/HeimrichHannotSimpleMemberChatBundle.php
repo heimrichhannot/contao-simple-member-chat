@@ -34,6 +34,7 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
         $definition->rootNode()->children()
             ->stringNode('contact_provider')->defaultValue('member_groups')->cannotBeEmpty()->end()
             ->arrayNode('polling')->addDefaultsIfNotSet()->children()
+                ->integerNode('activity_throttle')->min(0)->defaultValue(30)->end()
                 ->integerNode('messages_interval')->min(1)->defaultValue(4000)->end()
                 ->integerNode('conversations_interval')->min(1)->defaultValue(15000)->end()
                 ->integerNode('badge_interval')->min(1)->defaultValue(30000)->end()
@@ -75,7 +76,7 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
         /**
          * @var array{
          *     contact_provider: string,
-         *     polling: array{messages_interval: int, conversations_interval: int, badge_interval: int, max_interval_multiplier: int},
+         *     polling: array{activity_throttle: int, messages_interval: int, conversations_interval: int, badge_interval: int, max_interval_multiplier: int},
          *     message: array{max_length: int, rate_limit: int, rate_limiter: ?string},
          *     list: array{page_size: int, search_limit: int, search_min_length: int},
          *     contact: array{avatar_field: ?string, avatar_size: int|array{int, int, string}},
@@ -103,6 +104,7 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
             '$avatarField' => $options['contact']['avatar_field'],
             '$avatarSize' => $options['contact']['avatar_size'],
             '$providers' => $options['providers'],
+            '$activityThrottle' => $options['polling']['activity_throttle'],
         ]));
 
         foreach ([MemberGroupsContactProvider::class, SharedGroupsContactProvider::class] as $provider) {
