@@ -1180,3 +1180,37 @@ Kontaktsuche).
 | Turbo-Cache-Meta | `HtmlHeadBag` funktioniert in Legacy- und Twig-Layout, keine `TL_HEAD`-Lösung nötig | Konzept 5.1 bestätigt, keine Änderung |
 | Demo-Umgebung | Das Browser-Panel der Desktop-App erlaubt nur `localhost` und `127.0.0.1`; die Root-Seite des DDEV-Demos wurde von `contao0507.contao.hhdev` auf leere Domain umgestellt, damit `https://127.0.0.1:<port>` antwortet | Reversibel; für dauerhafte Nutzung `host_https_port` im DDEV-Projekt fixieren |
 
+### Erkenntnisse aus Phase 3b
+
+Abgeschlossen 2026-09-17, vier Codex-Commits, Bericht unter
+`.docs/build/reports/phase-3b-frontend-refinements.md`. Anschließend im
+Browser geprüft (Desktop und 375 px, angemeldet als Demo-Mitglied Alice,
+Gegenseite per HTTP-Skript). Die fünf Fixes aus Phase 3a sind bestätigt.
+
+**Im Browser bestätigt:** Senden mit Enter und Shift+Enter, Fokus zurück im
+Eingabefeld, Formular geleert, ans Ende gescrollt; relative Zeitangaben mit
+vollständigem `datetime` und Tooltip; Tagestrenner mit `role="separator"`,
+je Tag genau einer sichtbar, der doppelte an der Nachladegrenze wird
+ausgeblendet; Nachladen älterer Nachrichten per Klick **und** automatisch
+per `IntersectionObserver`, die sichtbare Nachricht bleibt pixelgenau
+stehen, `aria-live` kehrt nach dem Einfügen auf `polite` zurück; Nachladen
+weiterer Konversationen mit erhaltener Sortierung; Hinweis „New messages"
+bei hochgescrolltem Verlauf, Klick scrollt ans Ende und blendet ihn aus;
+Stumm-Schalter ändert `aria-pressed` und gibt den Fokus zurück, die Liste
+zeigt Symbol und `aria-label`, ohne Ungelesen-Zähler; Beschriftungen
+bleiben nach dem Senden in der Seitensprache; Wort-Prefix-Suche findet
+„Chat Carol" über „Car", ohne Treffer erscheint ein Hinweis, unterhalb der
+Mindestlänge nichts; Mobilansicht einspaltig mit versteckter Liste und
+ohne leeren Zustand; `since` bleibt über zwei Leerlauf-Polls konstant
+(Fix aus Phase 3a bestätigt).
+
+**Offene Befunde für einen Fix-Durchgang:**
+
+| Befund | Beobachtung | Vorschlag |
+| --- | --- | --- |
+| Höhe wird beim Seiten-Scrollen nicht neu berechnet | `resizeViewport()` hängt an `visualViewport`-Events und `window.resize`. Normales Dokument-Scrollen löst keines davon aus. Auf der Demo-Seite beginnt der Chat bei 377 px, bekommt 435 px Höhe und behält sie auch, wenn er nach dem Scrollen ganz oben steht: darunter bleiben rund 400 px leer | Dokument-Scrollen als Auslöser ergänzen (gedrosselt per `requestAnimationFrame`), oder die Höhe an einen Container binden, der selbst am Viewport klebt |
+| Kopfzeile frisst die Mobilhöhe | Im Demo-Theme belegt die Kopfzeile 191 px von 435 px, das Eingabefeld 145 px, für den Verlauf bleiben 99 px | Dem Verlauf eine Mindesthöhe geben und die Kopfzeile im Bundle-CSS kompakter halten (Name einzeilig mit Ellipse), damit fremde Theme-Schriftgrößen das Layout nicht kippen |
+| Stumm-Schalter ohne sichtbaren Zustand | Beschriftung bleibt „Mute conversation", es gibt keine CSS-Regel für `[aria-pressed="true"]`. Sehende Nutzer erkennen den Zustand nicht | Beschriftung im gedrückten Zustand auf „Unmute conversation" wechseln und zusätzlich eine sichtbare Zustandsauszeichnung ergänzen |
+| Nachladen kann bei Tab-Wechsel hängen bleiben | `loadMore()` wartet innerhalb von `try` auf einen `requestAnimationFrame`. Wird der Tab in diesem Moment versteckt, läuft weder der Rest des `try` noch das `finally`: `aria-live` bleibt `off` und die Frame-Sperre bestehen, bis der Tab wieder sichtbar ist | Das Warten auf den Frame aus dem kritischen Abschnitt nehmen oder gegen `visibilitychange` absichern |
+| Leerlauf-Poll rendert den obersten Eintrag neu | `since` ist inklusiv, also liefert jeder Poll die Konversation mit genau diesem Zeitstempel erneut; gemessen zwei Stream-Renderings pro Poll ohne inhaltliche Änderung | Bei „nichts Neues" mit `204` antworten oder den Cursor exklusiv mit ID-Tiebreaker führen |
+
