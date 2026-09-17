@@ -4,7 +4,7 @@
             <input{{ attrs().set('type', 'hidden').set('name', 'REQUEST_TOKEN').set('value', request_token).mergeWith(mute_token_attributes|default) }}>
             <input{{ attrs().set('type', 'hidden').set('name', 'page').set('value', page_id).mergeWith(mute_page_attributes|default) }}>
             <input{{ attrs().set('type', 'hidden').set('name', 'muted').set('value', view.muted ? '0' : '1').mergeWith(mute_value_attributes|default) }}>
-            <button{{ attrs().set('id', 'chat-mute-button').set('type', 'submit').set('aria-pressed', view.muted ? 'true' : 'false').mergeWith(mute_button_attributes|default) }}>{{ 'member_chat.mute'|trans }}</button>
+            <button{{ attrs().set('id', 'chat-mute-button').set('type', 'submit').set('aria-pressed', view.muted ? 'true' : 'false').mergeWith(mute_button_attributes|default) }}>{{ (view.muted ? 'member_chat.unmute' : 'member_chat.mute')|trans }}</button>
         </form>
     {% endblock %}
 </turbo-frame>

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    'member_chat.unmute' => 'Unmute conversation',
     'member_chat.more_messages' => 'Older messages',
     'member_chat.more_conversations' => 'More conversations',
     'member_chat.mute' => 'Mute conversation',

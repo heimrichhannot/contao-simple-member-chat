@@ -15,6 +15,14 @@
         --member-chat-load-more-fg: var(--member-chat-control-fg);
         --member-chat-new-messages-bg: var(--member-chat-accent);
         --member-chat-new-messages-fg: var(--member-chat-control-fg);
+        --member-chat-history-min-height: 12rem;
+        --member-chat-header-font-size: 1rem;
+        --member-chat-header-line-height: 1.25;
+        --member-chat-header-gap: .5rem;
+        --member-chat-header-control-font-size: .875rem;
+        --member-chat-header-control-padding: .5rem;
+        --member-chat-muted-bg: #334155;
+        --member-chat-muted-fg: #fff;
         --member-chat-day-fg: #475569;
         color: var(--member-chat-bubble-fg);
         background: var(--member-chat-background);
@@ -55,3 +63,14 @@
         .member-chat--with-conversation .member-chat__sidebar { display: block; }
     }
 }
+
+/* Structural header rules are unlayered so unlayered theme typography cannot
+   defeat the compact layout. Projects can override the custom properties. */
+.member-chat .member-chat__header { flex: 0 0 auto; flex-wrap: nowrap; gap: var(--member-chat-header-gap); }
+.member-chat .member-chat__header h2 { flex: 1 1 0; min-width: 0; margin: 0; padding: 0; font-size: var(--member-chat-header-font-size); line-height: var(--member-chat-header-line-height); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-chat .member-chat__header > a, .member-chat .member-chat__header > turbo-frame { flex: 0 0 auto; }
+.member-chat .member-chat__header form { margin: 0; padding: 0; }
+.member-chat .member-chat__header a, .member-chat .member-chat__header button { width: auto; margin: 0; min-height: 44px; padding: var(--member-chat-header-control-padding); font-size: var(--member-chat-header-control-font-size); line-height: var(--member-chat-header-line-height); white-space: nowrap; }
+.member-chat .member-chat__messages { min-height: var(--member-chat-history-min-height); }
+.member-chat #chat-compose { flex-shrink: 0; }
+.member-chat #chat-mute-button[aria-pressed="true"] { background: var(--member-chat-muted-bg); color: var(--member-chat-muted-fg); box-shadow: inset 0 0 0 2px currentColor; }

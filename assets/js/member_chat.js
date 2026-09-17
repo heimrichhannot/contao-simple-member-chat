@@ -133,8 +133,7 @@ async function loadMore(button) {
         await renderStreams(body)
         frame.dataset.chatBefore = response.headers.get('X-Chat-Before') || ''
         if (restoreFocus) (document.getElementById(button.id) || frame).focus({ preventScroll: true })
-        // Restore live announcements only after the history has been painted.
-        await new Promise(resolve => requestAnimationFrame(resolve))
+        // Stream rendering is complete; do not hold the lock for a repaint.
         state.failures = 0
     } catch (error) {
         if (error.name !== 'AbortError') {
@@ -289,6 +288,8 @@ function start() {
 window.visualViewport?.addEventListener('resize', resizeViewport)
 window.visualViewport?.addEventListener('scroll', resizeViewport)
 window.addEventListener('resize', resizeViewport)
+// Capture non-bubbling scroll events from the document and scrolling ancestors.
+document.addEventListener('scroll', resizeViewport, { capture: true, passive: true })
 
 document.addEventListener("turbo:load", start)
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start)

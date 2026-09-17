@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    'member_chat.unmute' => 'Stummschaltung aufheben',
     'member_chat.more_messages' => 'Ältere Nachrichten',
     'member_chat.more_conversations' => 'Weitere Konversationen',
     'member_chat.mute' => 'Konversation stummschalten',
