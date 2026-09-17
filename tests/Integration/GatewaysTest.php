@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace HeimrichHannot\SimpleMemberChatBundle\Tests\Integration;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
-use Doctrine\DBAL\Schema\Schema;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Conversation;
 use HeimrichHannot\SimpleMemberChatBundle\Event\ConversationCreatedEvent;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ConversationGateway;
@@ -21,17 +19,15 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MemberDataEraser;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MuteService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ReadTracker;
-use HeimrichHannot\SimpleMemberChatBundle\Tests\ServiceTestCase;
+use HeimrichHannot\SimpleMemberChatBundle\Tests\DatabaseTestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 use Symfony\Component\Uid\Uuid;
 
-final class GatewaysTest extends ServiceTestCase
+final class GatewaysTest extends DatabaseTestCase
 {
-    private Connection $connection;
-
     private ConversationGateway $conversations;
 
     private ParticipantGateway $participants;
@@ -41,59 +37,9 @@ final class GatewaysTest extends ServiceTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $url = getenv('MEMBER_CHAT_TEST_DATABASE_URL');
-        if ($url === false || $url === '') {
-            self::markTestSkipped('Set MEMBER_CHAT_TEST_DATABASE_URL to a dedicated *_test database.');
-        }
-
-        $this->connection = DriverManager::getConnection([
-            'url' => $url,
-        ]);
-        $database = $this->connection->getDatabase();
-        if ($database === null || !str_ends_with($database, '_test')) {
-            throw new \LogicException('Integration tests require a dedicated *_test database.');
-        }
-
-        $schema = new Schema();
-        foreach (['tl_chat_conversation', 'tl_chat_participant', 'tl_chat_message'] as $name) {
-            $this->connection->executeStatement('DROP TABLE IF EXISTS ' . $name);
-            require __DIR__ . '/../../contao/dca/' . $name . '.php';
-            /** @var array{fields: array<string, array{sql: array{type: string}}>, config: array{sql: array{keys: array<string, string>}}} $dca */
-            $dca = (\is_array($GLOBALS['TL_DCA']) ? $GLOBALS['TL_DCA'] : [])[$name];
-            $table = $schema->createTable($name);
-            foreach ($dca['fields'] as $field => $definition) {
-                $options = $definition['sql'];
-                $type = $options['type'];
-                unset($options['type']);
-                $table->addColumn($field, $type, $options);
-            }
-
-            foreach ($dca['config']['sql']['keys'] as $columns => $type) {
-                $columns = explode(',', $columns);
-                match ($type) {
-                    'primary' => $table->setPrimaryKey($columns),
-                    'unique' => $table->addUniqueIndex($columns),
-                    default => $table->addIndex($columns),
-                };
-            }
-        }
-
-        foreach ($schema->toSql($this->connection->getDatabasePlatform()) as $sql) {
-            $this->connection->executeStatement($sql);
-        }
-
         $this->conversations = new ConversationGateway($this->connection);
         $this->participants = new ParticipantGateway($this->connection);
         $this->messages = new MessageGateway($this->connection);
-    }
-
-    protected function tearDown(): void
-    {
-        if (isset($this->connection)) {
-            $this->connection->close();
-        }
-
-        parent::tearDown();
     }
 
     public function testUuidRoundTripAndInvalidLookup(): void
