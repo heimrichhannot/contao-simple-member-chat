@@ -4,7 +4,10 @@ Status: Phase 3b desktop and 375px review is recorded in `.docs/CONCEPT.md`,
 section 15. Confirmed behaviors below are historical reviewer evidence, not a
 new phase 3c browser pass. Phase 3c automated/HTTP checks pass; its browser
 rechecks are **not verified** because automatic approval review rejected the
-demo browser login. Do not start phase 4.
+demo browser login. The later reviewer verification in concept section 15
+supersedes that phase 3c status: desktop/375px scroll height, compact header,
+mute styling and idle polls are confirmed there. Phase 4 adds the checks below;
+no new browser login was performed by the implementing agent.
 
 ## Setup (outside the five-minute pass)
 
@@ -61,3 +64,20 @@ demo browser login. Do not start phase 4.
 | Visible mute state | Toggle twice by keyboard: translated action changes, pressed style is visibly distinct, focus stays on the button, header/compose remain intact. | HTTP confirms both English labels and pressed values. Browser focus/style recheck pending. |
 | Hidden history cleanup | Disable automatic history loading, activate Older messages, then background the tab as streams finish. Return: live region is polite, button usable, polling resumes. Repeat on slow network and with the final page. | Isolated post-render hidden-document test passes without executing a repaint. Real tab timing and screen reader behavior not verified. |
 | Idle polling | Inspect network from the initial list: unchanged polls send matching `since`/`fingerprint`, return 204 and produce no list streams. Send/read/mute in a second session, including rapid same-second changes: changes arrive; following idle poll is 204. | Initial and subsequent idle HTTP 204 verified; same-second mutations covered with the real test database. |
+
+
+## Phase 4 edges (manual acceptance pending)
+
+All rows below are **not verified in a browser**. HTTP and PHP evidence is in
+`build/reports/phase-4-edges.md`. No new demo content was created in phase 4.
+
+| Area | Action | Expected result |
+| --- | --- | --- |
+| Standalone badge | On a page without a chat element, render `member_chat_unread_badge({class: 'nav__badge'})`, enable `huh_member_chat_badge` and a Turbo entry, rebuild. Add the Turbo no-cache meta described in README. | No chat CSS is loaded solely for the badge. Server count/link is present immediately; anonymous output is empty. |
+| Zero count | Read all unmuted messages; have a second member send while the first stays on the badge-only page. | Empty `chat-unread` frame remains; within the badge interval (30 seconds default), a count/link appears. Repeated requests are full-frame GETs, no self-referencing src error or incremental stream error. |
+| Accessibility/locale | Inspect a positive badge in English/German, navigate by keyboard and use a screen reader. | Accessible label contains translated unread count, link opens chat at top level; polling has `aria-live=off`. Classes survive frame reload. |
+| Mute and tabs | Mute a conversation, send to it, background/restore the tab, then navigate with Drive. | Muted messages do not increase the badge; hidden tabs pause and restored pages have one timer, not duplicates. |
+| URL fallback | Visit each demo chat page, wait past activity throttle; test a deleted/unpublished/non-regular saved destination, then a root fallback. | Tracked valid page wins; invalid page falls back in root sorting/ID order; no valid destination renders a count without a broken link. |
+| Backend module | As an authorized backend user open Accounts → Member chat, open its message child list; repeat without module permission. | Pair/author labels and timestamps/excerpts render escaped; only children/delete on conversations and delete on messages. No participant module or create/edit UI; unauthorized users cannot access it. |
+| Moderation | Delete a middle message, then the last message, then the remaining message in a disposable conversation; reload the frontend. Delete another disposable conversation. | Last-message pointer/time follows the remaining tail or becomes zero; all child records disappear on conversation deletion. Already-open message logs require reload to remove deleted text. |
+| Theme and devices | Carry forward real iOS/Android/PWA, screen-reader and theme override checks above. | Results must be recorded separately; local automated checks do not certify these. |
