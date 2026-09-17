@@ -1,5 +1,3 @@
-import "../css/member_chat.css"
-
 const Turbo = window.Turbo
 if (!Turbo) {
     console.error('[member-chat] window.Turbo is missing. Activate "huh_ux_turbo_encore" or "huh_ux_turbo_encore_no_drive" on this page.')
@@ -164,7 +162,7 @@ function schedule(frame) {
 async function poll(frame) {
     const state = frames.get(frame)
     if (!state) return
-    if (document.hidden || frame.hasAttribute("busy") || !frame.checkVisibility() || state.loading) {
+    if (document.hidden || frame.hasAttribute("busy") || !(frame.dataset.chatPoll === "badge" ? frame.parentElement?.checkVisibility() : frame.checkVisibility()) || state.loading) {
         schedule(frame)
         return
     }
@@ -172,9 +170,14 @@ async function poll(frame) {
     state.abort = new AbortController()
     try {
         if (frame.dataset.chatMode !== "incremental") {
-            await frame.reload()
+            if (!frame.src && frame.dataset.chatUrl) {
+                frame.src = frame.dataset.chatUrl
+                await frame.loaded
+            } else {
+                await frame.reload()
+            }
             if (!frame.hasAttribute("complete")) throw new Error("Frame reload failed")
-            frame.dataset.chatMode = "incremental"
+            if (frame.dataset.chatPoll !== "badge") frame.dataset.chatMode = "incremental"
         } else {
             const messages = frame.dataset.chatPoll === "messages"
             let count
@@ -345,7 +348,7 @@ document.addEventListener("turbo:before-frame-render", event => {
     for (const key of ["chatAfter", "chatSince", "chatPageSize", "chatFingerprint"]) {
         if (incoming.dataset[key] !== undefined) frame.dataset[key] = incoming.dataset[key]
     }
-    frame.dataset.chatMode = "incremental"
+    if (frame.dataset.chatPoll !== "badge") frame.dataset.chatMode = "incremental"
 })
 
 document.addEventListener("turbo:frame-load", event => {

@@ -35,6 +35,9 @@ Path(sys.argv[3]).write_text(urllib.parse.urlencode(fields))
 PY
     request "$member-login" 302 -b "$out/$member.cookies" -c "$out/$member.cookies" --data-binary "@$out/login-data" "$base/phase3a-chat-legacy.html"
 done
+request badge-anonymous 401 "$base/_member_chat/unread"
+request badge 200 -b "$out/alice.cookies" -H 'Accept-Language: de' "$base/_member_chat/unread?_locale=en"
+request backend-smoke 302 "$base/contao?do=member_chat"
 request anonymous 401 "$base/_member_chat/conversations?page=86"
 request search 200 -b "$out/alice.cookies" "$base/_member_chat/contacts?page=86&q=Chat"
 extract_token "$out/search.html"
@@ -108,9 +111,16 @@ for layout in ['legacy','modern']:
     for frame in ['chat-search','chat-conversations','chat-messages','chat-compose']:
         assert 'id="'+frame+'"' in source
     print(layout+': head meta, Encore asset and all four frames verified')
-for name in ['anonymous','list','messages','compose','search','send','incremental','empty-poll','list-poll','foreign','invalid-csrf']:
+for name in ['badge-anonymous','badge','anonymous','list','messages','compose','search','send','incremental','empty-poll','list-poll','foreign','invalid-csrf']:
     headers=(p/(name+'.headers')).read_text().lower()
     assert 'no-store' in headers and 'private' in headers and 'vary: accept' in headers
+badge=(p/'badge.html').read_text()
+assert 'id="chat-unread"' in badge and 'aria-live="off"' in badge
+assert 'data-chat-poll="badge"' in badge and 'data-chat-mode="full"' in badge
+assert 'data-chat-poll-interval="30000"' in badge and 'data-chat-url=' in badge
+assert ' src=' not in badge and 'lang="en"' in badge
+assert 'contao/login' in (p/'backend-smoke.headers').read_text()
+print('Badge polling markup, locale, privacy and backend authentication boundary verified')
 body=(p/'send.html').read_text()
 assert 'action="append" target="chat-messages"' in body
 assert 'action="replace" target="chat-compose"' in body

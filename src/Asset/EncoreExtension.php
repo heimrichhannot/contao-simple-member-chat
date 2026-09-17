@@ -22,6 +22,9 @@ final class EncoreExtension implements EncoreExtensionInterface
      */
     public function getEntries(): array
     {
-        return [EncoreEntry::create(self::ENTRY, 'assets/js/member_chat.js')->setRequiresCss(true)];
+        return [
+            EncoreEntry::create(self::ENTRY, 'assets/js/member_chat_entry.js')->setRequiresCss(true),
+            EncoreEntry::create('huh_member_chat_badge', 'assets/js/member_chat.js'),
+        ];
     }
 }

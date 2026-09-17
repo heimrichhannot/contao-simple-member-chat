@@ -13,7 +13,7 @@ final class ChatResponseListener
     #[AsEventListener(priority: -1016)]
     public function __invoke(ResponseEvent $event): void
     {
-        if (!$event->isMainRequest() || !str_starts_with($event->getRequest()->getPathInfo(), '/_member_chat/')) {
+        if (!$event->isMainRequest() || (!str_starts_with($event->getRequest()->getPathInfo(), '/_member_chat/') && !$event->getRequest()->attributes->getBoolean('_member_chat_badge'))) {
             return;
         }
 
