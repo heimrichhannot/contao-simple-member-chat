@@ -222,3 +222,36 @@ not started. Host paths below mean `/home/dev/Kunden/contao/contao_0507`.
 - All browser behavior remains **not verified**; see
   `.docs/BROWSER_CHECKLIST.md`. HTTP login in the curl harness is distinct from
   browser login, which the prompt reserves for the reviewer.
+
+## Phase 3c
+
+Scope: only the five findings at the end of concept section 15. Phase 4 is
+not started. Verified against the installed vendor tree and host Turbo sources.
+
+| Decision | Evidence / contract |
+| --- | --- |
+| Capture passive document scroll events and use the existing animation-frame batch | Scroll does not bubble; capture also observes scrolling ancestors without per-container registration or lifecycle leaks. The existing visualViewport calculation, CSS breakpoint detection, bottom-state handling and `100dvh` fallback remain. The client regression harness exercises 377 → 0 root top, producing 435 → 812 measured height. |
+| Protect history with a 12rem minimum and compact header | The demo's generated `assets/css/files_contaodemo_theme_src_scss_app.scss.css` has unlayered `h2` size/margin rules, which outrank layered bundle rules regardless of specificity. Only compact header structure, history minimum, compose shrink protection and pressed-state rules are unlayered and scoped to `.member-chat`; no `!important`. The heading remains semantic, single-line and ellipsized; controls do not wrap. On a viewport shorter than the history minimum plus controls, document overflow is intentional to keep history and compose reachable. |
+| State-dependent translated mute action and visible pressed state | Existing Twig `trans` and conditional expressions; verified `vendor/symfony/twig-bridge/Extension/TranslationExtension.php::trans()` and `vendor/contao/core-bundle/src/String/HtmlAttributes.php::set()`. `aria-pressed`, frame/route/CSRF contracts and focus restoration stay unchanged. This supersedes 3b's fixed-label decision. |
+| Release the history lock immediately after wrapped stream rendering | Host `node_modules/@hotwired/turbo/dist/turbo.es2017-esm.js::StreamElement.render()` awaits the wrapped render after `nextRepaint()`; `renderStreamMessage()` returns void. Keep the batch completion mechanism but remove our additional post-render animation-frame await. The isolated regression test supplies completed streams with a hidden document and a repaint queue that never runs; cleanup still finishes. Turbo's own pre-render repaint behavior is unchanged. |
+| Keep inclusive, unbounded `since`; compare a fingerprint of the delivered view window | `ConversationGateway::listForMember()` is unchanged. SHA-256 covers the timestamp and normalized conversation view values (including UUID/order, contact, excerpt, unread and muted state). A timestamp plus conversation ID alone cannot distinguish a second change to the same row in one second. Integration coverage proves same-second send/read/mute/unmute changes. Empty or matching windows return private 204 before stream rendering. |
+| Fingerprint belongs to its cursor, not to HTTP cache state | New optional `fingerprint` query parameter, `X-Chat-Fingerprint` response header and `data-chat-fingerprint` attribute; `ChatView` adds trailing optional `conversationFingerprint: string`. Full pages/frames seed it through the factory. The next fingerprint covers only rows at/after the returned `X-Chat-Since`, not the old broader window. Normalize array keys after filtering. A truncated initial timestamp boundary fails comparison safely and delivers the full unbounded window. History responses never advance either polling value. The client copies the attribute on frame replacement and advances both values only after successful stream rendering. No ETag/304 or server session state. |
+| Existing response and request APIs | `vendor/symfony/http-foundation/InputBag.php::getString()`, `HeaderBag.php::set()`, `Response.php` status 204 and empty-response preparation; existing `TurboResponseFactory` supplies private/no-store and `Vary: Accept`, including 204. No registration changes or new external library APIs. |
+
+New CSS custom properties (all on `.member-chat`, overridable by project CSS):
+
+| Property | Default |
+| --- | --- |
+| `--member-chat-history-min-height` | `12rem` |
+| `--member-chat-header-font-size` | `1rem` |
+| `--member-chat-header-line-height` | `1.25` |
+| `--member-chat-header-gap` | `.5rem` |
+| `--member-chat-header-control-font-size` | `.875rem` |
+| `--member-chat-header-control-padding` | `.5rem` |
+| `--member-chat-muted-bg` | `#334155` |
+| `--member-chat-muted-fg` | `#fff` |
+
+All prior data attributes and view fields are preserved. The fingerprint
+represents the standard view data, not arbitrary project template output;
+projects adding independent dynamic list state must extend that contract.
+Browser/device verification limits and exact commands are in the phase 3c report.
