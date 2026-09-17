@@ -1,0 +1,5 @@
+<a{{ attrs().set('id', 'chat-conversation-' ~ item.uuid).addClass('member-chat__list-item').set('href', item.url).set('data-turbo', 'true').set('data-turbo-frame', '_top').set('data-chat-last-message-at', item.lastMessageAt).set('data-chat-changed-at', item.changedAt).set('data-chat-uuid', item.uuid).mergeWith(conversation_item_attributes|default) }}>
+    {% block partner %}{% if item.partner.avatarUrl %}<img src="{{ item.partner.avatarUrl }}" alt="" width="48" height="48">{% else %}<span aria-hidden="true">{{ item.partner.displayName|slice(0, 1) }}</span>{% endif %}<strong>{{ item.partner.displayName }}</strong>{% endblock %}
+    {% block excerpt %}<span>{{ item.excerpt }}</span>{% endblock %}
+    {% block status %}{% if item.muted %}<span aria-label="{{ 'member_chat.muted'|trans }}">🔕</span>{% elseif item.unreadCount %}<span aria-label="{{ 'member_chat.unread'|trans({'%count%': item.unreadCount}) }}">{{ item.unreadCount }}</span>{% endif %}{% endblock %}
+</a>

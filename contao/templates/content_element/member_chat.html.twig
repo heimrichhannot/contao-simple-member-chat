@@ -1,0 +1,28 @@
+{% extends '@Contao/content_element/_base.html.twig' %}
+{% block content %}
+    {% if as_editor_view %}
+        <p>{{ 'member_chat.editor_hint'|trans }}</p>
+    {% elseif view is null %}
+        {% block login_hint %}<p>{{ 'member_chat.login_hint'|trans }}</p>{% endblock %}
+    {% else %}
+        {% block layout %}
+            <div{{ attrs().addClass('member-chat').addClass(conversation_uuid ? 'member-chat--with-conversation' : '').mergeWith(chat_attributes|default) }}>
+                <aside class="member-chat__sidebar">
+                    {% block search %}{% include '@Contao/member_chat/contact_results.html.twig' %}{% endblock %}
+                    {% block conversations %}{% include '@Contao/member_chat/conversation_list.html.twig' %}{% endblock %}
+                </aside>
+                <section class="member-chat__conversation">
+                    {% if conversation_uuid %}
+                        {% block conversation_header %}
+                            <header class="member-chat__header"><a href="{{ back_url }}" data-turbo="true">{{ 'member_chat.back'|trans }}</a><h2>{{ view.partner.displayName }}</h2></header>
+                        {% endblock %}
+                        {% block messages %}{% include '@Contao/member_chat/message_list.html.twig' %}{% endblock %}
+                        {% block compose %}{% include '@Contao/member_chat/compose_form.html.twig' %}{% endblock %}
+                    {% else %}
+                        {% block empty_state %}<p>{{ 'member_chat.empty'|trans }}</p>{% endblock %}
+                    {% endif %}
+                </section>
+            </div>
+        {% endblock %}
+    {% endif %}
+{% endblock %}

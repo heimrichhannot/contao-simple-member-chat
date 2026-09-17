@@ -1,0 +1,1 @@
+<turbo-stream{{ attrs().set('action', 'append').set('target', 'chat-messages').mergeWith(stream_attributes|default) }}><template>{% for message in view.messages %}{% include '@Contao/member_chat/message.html.twig' %}{% endfor %}</template></turbo-stream>

@@ -1,0 +1,9 @@
+<form{{ attrs().addClass('member-chat__contact').set('action', open_url).set('method', 'post').set('data-turbo', 'true').set('data-turbo-frame', 'chat-search').set('data-chat-open', '').mergeWith(contact_attributes|default) }}>
+    {% block contact %}
+        <input type="hidden" name="REQUEST_TOKEN" value="{{ request_token }}">
+        <input type="hidden" name="member" value="{{ contact.memberId }}">
+        <input type="hidden" name="page" value="{{ page_id }}">
+        <input type="hidden" name="q" value="{{ query }}">
+        <button type="submit">{{ 'member_chat.open'|trans }}: {{ contact.displayName }}{% if contact.subtitle %} — {{ contact.subtitle }}{% endif %}</button>
+    {% endblock %}
+</form>

@@ -1,0 +1,14 @@
+<turbo-frame{{ attrs().set('id', 'chat-search').addClass('member-chat__search').mergeWith(search_attributes|default) }}>
+    {% block search_form %}
+        <form action="{{ search_url }}" method="get" data-turbo="true" data-turbo-frame="chat-search" data-chat-search data-chat-search-min-length="{{ options.searchMinLength }}">
+            <input type="hidden" name="page" value="{{ page_id }}">
+            <label for="chat-query">{{ 'member_chat.search'|trans }}</label>
+            <input id="chat-query" type="search" name="q" value="{{ query }}" autocomplete="off" enterkeyhint="search">
+            <button type="submit">{{ 'member_chat.search'|trans }}</button>
+        </form>
+    {% endblock %}
+    {% block results %}
+        {% if error %}<p role="alert">{{ error|trans }}</p>{% endif %}
+        {% for contact in contacts %}{% include '@Contao/member_chat/contact_result.html.twig' %}{% endfor %}
+    {% endblock %}
+</turbo-frame>

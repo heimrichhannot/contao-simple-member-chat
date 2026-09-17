@@ -1,1 +1,7 @@
-# Routes are introduced in phase 3.
+member_chat_controllers:
+    resource:
+        path: ../src/Controller/
+        namespace: HeimrichHannot\SimpleMemberChatBundle\Controller
+    type: attribute
+    defaults:
+        _scope: frontend

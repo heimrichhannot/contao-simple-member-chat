@@ -1,0 +1,2 @@
+{% include '@Contao/member_chat/messages.stream.html.twig' %}
+<turbo-stream{{ attrs().set('action', 'replace').set('target', 'chat-compose').mergeWith(compose_stream_attributes|default) }}><template>{% include '@Contao/member_chat/compose_form.html.twig' %}</template></turbo-stream>

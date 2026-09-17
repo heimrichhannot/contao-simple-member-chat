@@ -5,7 +5,7 @@ services:
 
     HeimrichHannot\SimpleMemberChatBundle\:
         resource: ../src/
-        exclude: ../src/{Configuration,ContaoManager,DependencyInjection,Contact/Viewer.php,Domain,Event,Exception,HeimrichHannotSimpleMemberChatBundle.php}
+        exclude: ../src/{Configuration,ContaoManager,DependencyInjection,Contact/Viewer.php,View/Model,Domain,Event,Exception,HeimrichHannotSimpleMemberChatBundle.php}
 
     HeimrichHannot\SimpleMemberChatBundle\Service\ContactPermissionInterface:
         alias: HeimrichHannot\SimpleMemberChatBundle\Service\ContactPermission

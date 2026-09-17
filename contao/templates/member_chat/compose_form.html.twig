@@ -1,0 +1,12 @@
+<turbo-frame{{ attrs().set('id', 'chat-compose').addClass('member-chat__compose').mergeWith(compose_attributes|default) }}>
+    {% block form %}
+        <form action="{{ send_url }}" method="post" data-turbo="true" data-turbo-frame="chat-compose" data-chat-compose>
+            <input type="hidden" name="REQUEST_TOKEN" value="{{ request_token }}">
+            <input type="hidden" name="page" value="{{ page_id }}">
+            {% if error %}<p id="chat-compose-error" role="alert">{{ error|trans }}</p>{% endif %}
+            <label for="chat-text">{{ 'member_chat.message'|trans }}</label>
+            <textarea{{ attrs().set('id', 'chat-text').set('name', 'text').set('rows', 2).set('required', true).set('maxlength', options.maxLength).set('enterkeyhint', 'send').set('autocomplete', 'off').set('autocapitalize', 'sentences').set('aria-describedby', error ? 'chat-compose-error' : null).mergeWith(textarea_attributes|default) }}>{{ text }}</textarea>
+            <button type="submit">{{ 'member_chat.send'|trans }}</button>
+        </form>
+    {% endblock %}
+</turbo-frame>
