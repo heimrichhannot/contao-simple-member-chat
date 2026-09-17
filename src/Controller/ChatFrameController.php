@@ -6,9 +6,9 @@ namespace HeimrichHannot\SimpleMemberChatBundle\Controller;
 
 use HeimrichHannot\SimpleMemberChatBundle\Contact\ContactService;
 use HeimrichHannot\SimpleMemberChatBundle\Exception\AuthenticationRequiredException;
-use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatReader;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\FrontendMemberProvider;
 use HeimrichHannot\SimpleMemberChatBundle\View\ChatContextFactory;
 use HeimrichHannot\SimpleMemberChatBundle\View\ConversationPollFingerprint;
@@ -25,7 +25,7 @@ final readonly class ChatFrameController
         private FrontendMemberProvider $members,
         private ConversationAccess $access,
         private ChatReader $reader,
-        private ChatPageUrlGenerator $pages,
+        private ConversationUrlGenerator $pages,
         private ChatContextFactory $contexts,
         private TurboResponseFactory $responses,
         private Environment $twig,

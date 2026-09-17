@@ -21,11 +21,11 @@ use HeimrichHannot\SimpleMemberChatBundle\Gateway\ConversationGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\MessageGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ParticipantGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatEventDispatcher;
-use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatReader;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatTransaction;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ContactPermissionInterface;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationService;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MemberDataEraser;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MuteService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ReadTracker;
@@ -212,7 +212,7 @@ final class GatewaysTest extends DatabaseTestCase
             self::createStub(TranslatorInterface::class),
         );
         $views = new ChatViewFactory($resolver,
-            new ChatPageUrlGenerator(self::createStub(ContaoFramework::class), self::createStub(ContentUrlGenerator::class)),
+            new ConversationUrlGenerator(self::createStub(ContaoFramework::class), self::createStub(ContentUrlGenerator::class), new ParticipantGateway($this->connection)),
             new DaySeparatorFactory(self::createStub(TranslatorInterface::class)),
         );
         $reads = new ReadTracker($this->conversations, $this->participants, $this->messages, $this->memberProvider(9), new ChatTransaction($this->connection), new ChatEventDispatcher(new EventDispatcher(), new NullLogger()));

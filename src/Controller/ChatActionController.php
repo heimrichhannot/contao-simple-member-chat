@@ -7,10 +7,10 @@ namespace HeimrichHannot\SimpleMemberChatBundle\Controller;
 use Contao\CoreBundle\Exception\PageNotFoundException;
 use HeimrichHannot\SimpleMemberChatBundle\Exception\AuthenticationRequiredException;
 use HeimrichHannot\SimpleMemberChatBundle\Exception\ChatException;
-use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatReader;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationService;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\FrontendMemberProvider;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MessageService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MuteService;
@@ -31,7 +31,7 @@ final readonly class ChatActionController
         private MessageService $messages,
         private ConversationService $conversations,
         private ChatReader $reader,
-        private ChatPageUrlGenerator $pages,
+        private ConversationUrlGenerator $pages,
         private ChatContextFactory $contexts,
         private TurboResponseFactory $responses,
         private Environment $twig,

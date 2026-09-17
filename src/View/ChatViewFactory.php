@@ -8,7 +8,7 @@ use Contao\PageModel;
 use HeimrichHannot\SimpleMemberChatBundle\Contact\ContactResolver;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\ConversationListItem;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Message;
-use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\View\Model\ChatView;
 use HeimrichHannot\SimpleMemberChatBundle\View\Model\ConversationItemView;
 use HeimrichHannot\SimpleMemberChatBundle\View\Model\MessageView;
@@ -17,7 +17,7 @@ final readonly class ChatViewFactory
 {
     public function __construct(
         private ContactResolver $contacts,
-        private ChatPageUrlGenerator $urls,
+        private ConversationUrlGenerator $urls,
         private DaySeparatorFactory $days,
     ) {
     }

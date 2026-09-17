@@ -8,6 +8,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Domain\Conversation;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Message;
 use Symfony\Contracts\EventDispatcher\Event;
 
+/** Stable public integration event; dispatched after the owning transaction commits. */
 final class MessageSentEvent extends Event
 {
     /**

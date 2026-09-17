@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HeimrichHannot\SimpleMemberChatBundle\Domain;
 
+/** Stable public integration value object. */
 final readonly class Message
 {
     public function __construct(

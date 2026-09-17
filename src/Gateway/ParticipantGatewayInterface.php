@@ -19,9 +19,13 @@ interface ParticipantGatewayInterface
     public function conversationIds(int $memberId): array;
 
     /**
+     * Stable read-only integration API. Muted state and lastReadAt are current at lookup.
+     *
      * @return array{lastReadAt: int, lastReadMessageId: int, lastPageId: int, muted: bool}|null
      */
     public function state(int $conversationId, int $memberId): ?array;
+
+    public function lastPageId(int $memberId): int;
 
     public function markRead(int $conversationId, int $memberId, int $upToMessageId, int $now, ?int $pageId): bool;
 

@@ -8,6 +8,9 @@ use HeimrichHannot\SimpleMemberChatBundle\Domain\Message;
 
 interface MessageGatewayInterface
 {
+    /**
+     * Stable public integration API; deleted messages return null.
+     */
     public function find(int $id): ?Message;
 
     /**

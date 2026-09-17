@@ -9,7 +9,7 @@ use Contao\CoreBundle\Util\LocaleUtil;
 use Contao\PageModel;
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Conversation;
-use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Translation\LocaleSwitcher;
@@ -17,7 +17,7 @@ use Symfony\Component\Translation\LocaleSwitcher;
 final readonly class ChatContextFactory
 {
     public function __construct(
-        private ChatPageUrlGenerator $pages,
+        private ConversationUrlGenerator $pages,
         private UrlGeneratorInterface $routes,
         private ContaoCsrfTokenManager $tokens,
         private ChatOptions $options,

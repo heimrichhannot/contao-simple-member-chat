@@ -15,6 +15,9 @@ final readonly class MessageGateway implements MessageGatewayInterface
     ) {
     }
 
+    /**
+     * Stable public integration API; deleted messages return null.
+     */
     public function find(int $id): ?Message
     {
         /** @var MessageRow|false $row */

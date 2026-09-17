@@ -50,6 +50,7 @@ final readonly class ParticipantGateway implements ParticipantGatewayInterface
     /**
      * @return array{lastReadAt: int, lastReadMessageId: int, lastPageId: int, muted: bool}|null
      */
+    // Stable read-only integration API: null means the recipient is no longer a participant.
     public function state(int $conversationId, int $memberId): ?array
     {
         /** @var array{lastReadAt: int|string, lastReadMessageId: int|string, lastPageId: int|string, muted: string}|false $row */
@@ -61,6 +62,14 @@ final readonly class ParticipantGateway implements ParticipantGatewayInterface
             'lastPageId' => (int) $row['lastPageId'],
             'muted' => $row['muted'] !== '',
         ];
+    }
+
+    public function lastPageId(int $memberId): int
+    {
+        /** @var int|string|false $id */
+        $id = $this->connection->fetchOne('SELECT lastPageId FROM tl_chat_participant WHERE member = ? AND lastPageId > 0 ORDER BY lastReadAt DESC, id DESC LIMIT 1', [$memberId]);
+
+        return $id === false ? 0 : (int) $id;
     }
 
     public function markRead(int $conversationId, int $memberId, int $upToMessageId, int $now, ?int $pageId): bool

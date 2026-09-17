@@ -26,9 +26,10 @@ use HeimrichHannot\SimpleMemberChatBundle\EventListener\ChatResponseListener;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ContactGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ContactGatewayInterface;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ConversationGatewayInterface;
+use HeimrichHannot\SimpleMemberChatBundle\Gateway\ParticipantGatewayInterface;
 use HeimrichHannot\SimpleMemberChatBundle\Security\Voter\ConversationVoter;
-use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Twig\MessageRuntime;
 use HeimrichHannot\SimpleMemberChatBundle\View\ChatViewFactory;
 use HeimrichHannot\SimpleMemberChatBundle\View\DaySeparatorFactory;
@@ -169,9 +170,9 @@ final class FrontendTest extends ContaoTestCase
 
             return '/chat' . $parameters['parameters'];
         });
-        $helper = new ChatPageUrlGenerator($this->createContaoFrameworkStub([
+        $helper = new ConversationUrlGenerator($this->createContaoFrameworkStub([
             PageModel::class => $adapter,
-        ]), $urls);
+        ]), $urls, self::createStub(ParticipantGatewayInterface::class));
         self::assertSame($page, $helper->page(12));
         self::assertSame('/chat/uuid', $helper->generate($page, 'uuid'));
         self::assertSame('/chat', $helper->generate($page));
@@ -181,9 +182,9 @@ final class FrontendTest extends ContaoTestCase
     {
         $adapter = $this->createAdapterStub(['findWithDetails']);
         $adapter->method('__call')->willReturn(null);
-        $helper = new ChatPageUrlGenerator($this->createContaoFrameworkStub([
+        $helper = new ConversationUrlGenerator($this->createContaoFrameworkStub([
             PageModel::class => $adapter,
-        ]), self::createStub(ContentUrlGenerator::class));
+        ]), self::createStub(ContentUrlGenerator::class), self::createStub(ParticipantGatewayInterface::class));
         $this->expectException(PageNotFoundException::class);
         $helper->page(0);
     }
@@ -201,7 +202,7 @@ final class FrontendTest extends ContaoTestCase
         $resolver = new ContactResolver($members, new ContactFactory(new ChatOptions(), self::createStub(Studio::class), self::createStub(ContaoFramework::class)), self::createStub(TranslatorInterface::class));
         $urls = self::createStub(ContentUrlGenerator::class);
         $urls->method('generate')->willReturn('/chat/uuid');
-        $factory = new ChatViewFactory($resolver, new ChatPageUrlGenerator(self::createStub(ContaoFramework::class), $urls), new DaySeparatorFactory(self::createStub(TranslatorInterface::class)));
+        $factory = new ChatViewFactory($resolver, new ConversationUrlGenerator(self::createStub(ContaoFramework::class), $urls, self::createStub(ParticipantGatewayInterface::class)), new DaySeparatorFactory(self::createStub(TranslatorInterface::class)));
         $conversation = new Conversation(1, 'uuid', 7, 9, 0, 100, 11);
         $view = $factory->create($this->createClassWithPropertiesStub(PageModel::class), 9, [new ConversationListItem($conversation, 7, null, 2, false, 120)], [new Message(10, 1, 9, 'own', 100), new Message(11, 1, 7, 'partner', 100), new Message(12, 1, 7, 'next day', 100000)], 7, 10, moreMessages: true, moreConversations: true, muted: true);
         self::assertSame('Partner', $view->partner?->displayName);
