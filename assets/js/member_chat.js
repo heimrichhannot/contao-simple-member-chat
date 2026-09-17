@@ -209,6 +209,7 @@ async function poll(frame) {
     } finally {
         state.loading = false
         schedule(frame)
+        discover()
     }
 }
 
@@ -263,7 +264,15 @@ function start() {
     loadObserver?.disconnect()
     loadObserver = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(entries => {
         entries.forEach(entry => {
-            if (entry.isIntersecting && entry.target.checkVisibility()) loadMore(entry.target)
+            if (!entry.isIntersecting || !entry.target.checkVisibility() || entry.target.closest('[data-chat-auto-load="false"]')) return
+            const frame = entry.target.closest('[data-chat-poll]')
+            if (frames.get(frame)?.loading || frame.hasAttribute('busy')) {
+                // Retry observation after the poll or lazy frame render completes.
+                loadObserver.unobserve(entry.target)
+                observedButtons.delete(entry.target)
+                return
+            }
+            loadMore(entry.target)
         })
     })
     // Existing buttons must be re-observed on a Turbo lifecycle restart.

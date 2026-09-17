@@ -166,3 +166,59 @@ Twig 3.28 vendor tree. Paths are relative to the bundle unless labelled
 - Avatar display-column metadata, including a missing configured field, is
   memoized on the gateway instance for its process lifetime. The gateway's
   dependencies remain readonly; only the private cached projection is mutable.
+
+## Phase 3b
+
+Verified on 2026-09-17 against the installed Contao 5.7.13 / Symfony 7.4 /
+Twig 3.28 sources and the host's installed Turbo distribution. Phase 4 is
+not started. Host paths below mean `/home/dev/Kunden/contao/contao_0507`.
+
+| Choice | Evidence and consequence |
+| --- | --- |
+| Resolve the page locale before building views and rendering any successful frame/stream or application validation response | `vendor/contao/core-bundle/contao/models/PageModel.php::loadDetails()` assigns both `rootLanguage` and `language` from the root. `src/Routing/Page/PageRoute.php` derives `_locale` through `LocaleUtil::formatAsLocale()`. `src/Util/LocaleUtil.php` converts locale IDs and HTML language tags. `vendor/symfony/translation/LocaleSwitcher.php::setLocale()` updates locale-aware services, including translation and the routing context; `vendor/symfony/http-foundation/Request.php::setLocale()` updates `_locale`. `ChatContextFactory` does both and provides `language` for HTML. The messages controller now creates context before its reader, so placeholder contacts and day labels also use the page locale. The switcher implements `reset()` for kernel reset; these routes do not run a second page locale in the same response. |
+| Preserve list change timestamps on idle activity | `ParticipantGateway::markRead()` reads the state under the existing service-owned conversation lock (`ReadTracker`, `ChatTransaction`). A greater delivered message ID changes `lastReadMessageId`, activity/page and `tstamp` immediately. Otherwise it skips writes until `polling.activity_throttle` seconds have elapsed (default 30; zero disables throttling), then updates only activity/page. `setMuted()` has a SQL difference predicate, so setting the same value is a no-op. `ConversationGateway::listForMember()` continues using `GREATEST(lastMessageAt, p.tstamp)`. Integration tests prove the boundary, unchanged list cursor, immediate new read, repeated mute and configurable zero. |
+| Look ahead one row for history availability | `MessageGateway::window()` already returns chronological `before` pages; `ConversationGateway::listForMember()` already supports the `(lastMessageAt,id)` boundary. `ChatReader` requests `page_size + 1`, discards the lookahead, and maps only delivered records. `after` remains the earliest unseen page of exactly `page_size`; `since` remains inclusive and unbounded. A before response only has `X-Chat-Before` (empty at exhaustion), never `X-Chat-After` or `X-Chat-Since`. |
+| Explicit scroll correction, not native overflow anchoring | Capture the first visible message ID and its offset relative to the log immediately before a stream renders. Reconcile message order/day boundaries and formatted time text, then restore that offset. `overflow-anchor: none` avoids double correction. New messages scroll down only when already at the bottom; own sends still scroll down. Actual pixel stability in a browser is **not verified**; the checklist includes both prepend and final-button removal. |
+| Wait for stream rendering before releasing the history request lock | **Host** `node_modules/@hotwired/turbo/dist/turbo.es2017-esm.js`: `StreamElement::render()` dispatches `turbo:before-stream-render`, waits for the next repaint, and awaits the replaceable `event.detail.render`. `renderStreamMessage()` returns no completion promise. A client batch marker and counter therefore resolve only after every wrapped render. `StreamActions.append/prepend` deduplicate direct children by ID. The button is disabled during fetch/render, and polls share the same per-frame loading guard. |
+| IntersectionObserver observes both load-more buttons | A native `IntersectionObserver` triggers the same guarded load function as a click. New buttons are discovered by the existing mutation observer; registration is deferred while that frame is loading. `data-chat-auto-load="false"` on either frame disables automatic observation; lack of the API leaves the button usable. The observer disconnects before Turbo cache. Failure leaves manual retry available. Browser intersection behavior is **not verified**. |
+| Window-local day boundaries with client boundary reconciliation | `DaySeparatorFactory` emits Today/Yesterday via the translator, localized weekdays via PHP Intl for the preceding six calendar days, otherwise the page `dateFormat`. PHP's configured timezone is used for both server day keys and Twig dates. Each window emits a separator before its first message and at day transitions. The client orders message/separator pairs by message ID and hides redundant separators when adjacent message dates match, removing duplicates from visible and accessible output while retaining candidates for later stream deduplication. This also handles an incoming message preceding an already displayed local send. |
+| Page-language time display, device-timezone formatting | HTML `lang` is supplied on chat roots/messages/list/mute. The client uses the nearest `lang`, `Intl.RelativeTimeFormat` for recent times, and `Intl.DateTimeFormat` for older times and a full tooltip. It runs at load, every frame/stream render and every 30 seconds. Server text and the original `datetime` stay the fallback and machine-readable source. |
+| Dynamic viewport height follows CSS layout | The script detects the single-column state from sidebar visibility, so it does not duplicate a hardcoded breakpoint. Only with `visualViewport` does it set `--member-chat-viewport-height` to visual height minus the visible actual root top (accounting for `offsetTop`). CSS subtracts `--member-chat-offset-top`. Resize/scroll, Turbo load and ResizeObserver events recalculate it. Desktop removes the measured property; `100dvh` stays the fallback. Bottom state is preserved when height changes. Real iOS/standalone/Android keyboard behavior is **not verified**. |
+| Accessible mute remains a non-polled frame | Existing attribute `Route` / `_token_check` / `REQUEST_TOKEN` APIs verified in `vendor/symfony/routing/Attribute/Route.php`, `vendor/contao/core-bundle/src/EventListener/RequestTokenListener.php` and `src/Csrf/ContaoCsrfTokenManager.php`. Strict `muted=0|1`, UUID access checking and `MuteService` retain the existing transaction contract. The stable toggle label uses `aria-pressed`; focus is remembered before Turbo disables the submit button and restored after replacement. |
+| Extensible markup | `vendor/contao/core-bundle/src/String/HtmlAttributes.php::{set,mergeWith}` accepts the typed values used here. New controls and separators use partial blocks with merge attributes. All templates stay under `contao/templates/`. |
+
+### Additive contracts and concept corrections
+
+- `ChatView` adds `beforeMessageId: ?int`, `beforeConversation: ?string`,
+  `muted: bool`. `MessageView` adds `daySeparator: ?DaySeparatorView` with
+  `day` (`Y-m-d`) and translated `label`. Existing properties remain intact.
+- Before cursors are independent of poll cursors. The list history cursor
+  includes the integer tie-breaker exactly as the phase prompt requires;
+  this is an explicit exception to the concept's blanket statement that an
+  internal conversation ID never leaves the server. Conversation navigation
+  and authorization continue to use UUIDs. No standalone ID field is exposed.
+- New frame state: `data-chat-auto-load`, `data-chat-loaded-before`,
+  `data-chat-before`, `data-chat-at-bottom`, `data-chat-has-new`; existing
+  polling, `after`, `since` and page-size attributes are preserved.
+- New controls: `chat-more-messages`, `chat-more-conversations`, `chat-mute`,
+  `chat-mute-button`; history buttons carry `data-chat-load-more`,
+  `data-chat-before`, `data-chat-url`. Message day keys and separator ownership
+  use `data-chat-message-day` / `data-chat-day-message`.
+- After a history page, polling stays incremental. Send responses never move
+  `after`; before responses never move `after` or `since`. Empty list polls
+  echo at least the supplied `since`, avoiding an apparent cursor regression.
+- Activity-only page tracking is now delayed along with `lastReadAt`, including
+  switching pages inside the throttle period. That is the requested activity
+  throttle; phase 4 URL fallback must account for up to 30 seconds of staleness.
+- Concept 5.7's ban on inline styles has a narrow required exception: the
+  script supplies the measured viewport custom property. CSS still controls
+  layout and subtracts the project offset. The script does not choose a
+  desktop breakpoint. No generic styling policy was changed.
+- The mute toggle retains a fixed label ("Mute conversation") with
+  `aria-pressed` describing state. The list reflects muting on its next poll.
+- Search matches literal field or word prefixes, not arbitrary substrings.
+  Below the minimum, the results area is empty; stale in-flight query responses
+  cannot restore old results after the user clears the query.
+- All browser behavior remains **not verified**; see
+  `.docs/BROWSER_CHECKLIST.md`. HTTP login in the curl harness is distinct from
+  browser login, which the prompt reserves for the reviewer.

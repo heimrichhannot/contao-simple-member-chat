@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-base=https://contao0507.contao.hhdev
+base=${CHAT_BASE_URL:-https://127.0.0.1:32773}
 chat_uuid=01a0ae9d-2c0d-7b36-8209-a415ae1e4ed5
 foreign_uuid=01a0ae9e-4c90-7a3e-a0e8-ad8caacf4c85
 out=$(mktemp -d /tmp/member-chat-http.XXXXXX)
@@ -13,7 +13,7 @@ request() {
     local status
     status=$(awk 'NR==1 {print $2}' "$out/$name.headers")
     printf '%s: HTTP %s\n' "$name" "$status"
-    test "$status" = "$expected"
+    [[ "|$expected|" == *"|$status|"* ]]
 }
 extract_token() {
     python3 - "$1" "$out/token" <<'PY'
@@ -45,15 +45,47 @@ request list 200 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=
 request messages 200 -b "$out/alice.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86"
 request compose 200 -b "$out/alice.cookies" "$base/_member_chat/conversations/$chat_uuid/compose?page=86"
 extract_token "$out/compose.html"
-request send 200 -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86' --data-urlencode 'text=Phase 3a verification https://example.org/?a=1&b=2 <script>alert(1)</script>' "$base/_member_chat/conversations/$chat_uuid/messages"
+request send 200 -H 'Accept-Language: de' -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86' --data-urlencode 'text=Phase 3a verification https://example.org/?a=1&b=2 <script>alert(1)</script>' "$base/_member_chat/conversations/$chat_uuid/messages"
 request invalid-message 422 -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86&text=%20%20' "$base/_member_chat/conversations/$chat_uuid/messages"
 request invalid-csrf 400 -b "$out/alice.cookies" --data 'page=86&text=Rejected&REQUEST_TOKEN=invalid' "$base/_member_chat/conversations/$chat_uuid/messages"
 request incremental 200 -b "$out/bob.cookies" -H 'Accept: text/vnd.turbo-stream.html' "$base/_member_chat/conversations/$chat_uuid/messages?page=86&after=0"
 after=$(awk 'tolower($1)=="x-chat-after:" {gsub("\r", "", $2); print $2}' "$out/incremental.headers")
+# Drain the earliest unseen windows before asserting an idle response.
+while [ "$(awk 'tolower($1)=="x-chat-count:" {gsub("\r", "", $2); print $2}' "$out/incremental.headers")" = 50 ]; do
+    request incremental '200|204' -b "$out/bob.cookies" -H 'Accept: text/vnd.turbo-stream.html' "$base/_member_chat/conversations/$chat_uuid/messages?page=86&after=$after"
+    if [ ! -s "$out/incremental.html" ]; then break; fi
+    after=$(awk 'tolower($1)=="x-chat-after:" {gsub("\r", "", $2); print $2}' "$out/incremental.headers")
+done
 request empty-poll 204 -b "$out/bob.cookies" -H 'Accept: text/vnd.turbo-stream.html' "$base/_member_chat/conversations/$chat_uuid/messages?page=86&after=$after"
 request list-poll 200 -b "$out/alice.cookies" -H 'Accept: text/vnd.turbo-stream.html' "$base/_member_chat/conversations?page=86&since=0"
 request foreign 404 -b "$out/alice.cookies" "$base/_member_chat/conversations/$foreign_uuid/messages?page=86"
 request malformed 404 -b "$out/alice.cookies" "$base/phase3a-chat-legacy/not-a-uuid.html"
+# Phase 3b: language must come from the English page, including action streams.
+request locale 200 -b "$out/alice.cookies" -H 'Accept-Language: de' "$base/_member_chat/conversations/$chat_uuid/compose?page=86"
+request word-search 200 -b "$out/alice.cookies" "$base/_member_chat/contacts?page=86&q=Car"
+request no-contacts 200 -b "$out/alice.cookies" -H 'Accept-Language: de' "$base/_member_chat/contacts?page=86&q=zzzznomatch"
+request short-search 200 -b "$out/alice.cookies" "$base/_member_chat/contacts?page=86&q=C"
+request idle-list-one 200 -b "$out/bob.cookies" "$base/_member_chat/conversations?page=86&since=0"
+sleep 2
+request idle-message 204 -b "$out/bob.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86&after=$after"
+request idle-list-two 200 -b "$out/bob.cookies" "$base/_member_chat/conversations?page=86&since=0"
+request older-messages 200 -b "$out/bob.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86&before=$after"
+request mixed-messages 400 -b "$out/bob.cookies" "$base/_member_chat/conversations/$chat_uuid/messages?page=86&before=$after&after=0"
+before=$(python3 - "$out/list.html" <<'PYCODE'
+from pathlib import Path
+import re, sys, html
+print(html.unescape(re.search(r'data-chat-before="([^"]+)"', Path(sys.argv[1]).read_text())[1]))
+PYCODE
+)
+request older-conversations 200 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86&before=$before"
+request mixed-conversations 400 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86&before=$before&since=0"
+request mute 200 -b "$out/alice.cookies" -H 'Accept-Language: de' --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86&muted=1' "$base/_member_chat/conversations/$chat_uuid/mute"
+request muted-list 200 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86&since=0"
+extract_token "$out/mute.html"
+request mute-invalid 400 -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86&muted=2' "$base/_member_chat/conversations/$chat_uuid/mute"
+request mute-csrf 400 -b "$out/alice.cookies" --data 'page=86&muted=1&REQUEST_TOKEN=invalid' "$base/_member_chat/conversations/$chat_uuid/mute"
+request mute-foreign 404 -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86&muted=1' "$base/_member_chat/conversations/$foreign_uuid/mute"
+request unmute 200 -b "$out/alice.cookies" -H 'Accept-Language: de' --data-urlencode "REQUEST_TOKEN@$out/token" --data 'page=86&muted=0' "$base/_member_chat/conversations/$chat_uuid/mute"
 python3 - "$out" <<'PY'
 from pathlib import Path
 import sys, re
@@ -76,6 +108,7 @@ assert '&lt;script&gt;' in body and '<script>alert' not in body
 assert 'rel="noopener nofollow" target="_blank"' in body
 assert 'text/vnd.turbo-stream.html' in (p/'send.headers').read_text()
 assert re.search(r'<textarea[^>]*></textarea>', body)
+assert '>Send</button>' in body
 assert re.search(r'<textarea[^>]*>  </textarea>', (p/'invalid-message.html').read_text())
 assert (p/'empty-poll.html').stat().st_size == 0
 # Turbo rejects a frame response whose <turbo-frame> src references the request URL.
@@ -85,6 +118,31 @@ for name in ['list','messages']:
 for layout in ['legacy','modern']:
     source=(p/(layout+'.html')).read_text()
     assert re.search(r'<turbo-frame[^>]*id="chat-messages"[^>]*\ssrc=', source), layout+' page must embed messages frame with src'
+assert '>Send</button>' in (p/'locale.html').read_text()
+assert 'Chat Carol' in (p/'word-search.html').read_text()
+assert 'No contacts found.' in (p/'no-contacts.html').read_text()
+assert 'No contacts found.' not in (p/'short-search.html').read_text()
+def header(name, key):
+    return re.search(r'^'+key+r':(.*)$', (p/(name+'.headers')).read_text(), re.M|re.I)[1].strip()
+assert header('idle-list-one', 'x-chat-since') == header('idle-list-two', 'x-chat-since')
+print('Stable idle X-Chat-Since: '+header('idle-list-two', 'x-chat-since'))
+for name, action, target in [('older-messages','prepend','chat-messages'),('older-conversations','append','chat-conversations')]:
+    source=(p/(name+'.html')).read_text()
+    assert 'action="'+action+'" target="'+target+'"' in source
+    assert 'x-chat-before:' in (p/(name+'.headers')).read_text().lower()
+    assert 'x-chat-after:' not in (p/(name+'.headers')).read_text().lower()
+    assert 'x-chat-since:' not in (p/(name+'.headers')).read_text().lower()
+    assert ('data-chat-message-id' if target == 'chat-messages' else 'data-chat-uuid') in source
+assert 'role="separator"' in (p/'older-messages.html').read_text()
+for name, pressed in [('mute','true'),('unmute','false')]:
+    source=(p/(name+'.html')).read_text()
+    assert 'action="replace" target="chat-mute"' in source
+    assert 'aria-pressed="'+pressed+'"' in source
+    assert '>Mute conversation</button>' in source
+    assert 'data-chat-poll' not in source and ' src=' not in source
+assert 'aria-label="Muted"' in (p/'muted-list.html').read_text()
+assert 'aria-describedby="chat-compose-error"' in (p/'invalid-message.html').read_text()
+print('Locale, word search, before windows, mute/CSRF/access and error association verified')
 print('Frame responses carry no self-referencing src')
 print('Headers, escaping, form reset, error text preservation and empty poll verified')
 print('Responses saved to '+str(p))
