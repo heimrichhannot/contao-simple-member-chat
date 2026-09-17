@@ -3,7 +3,7 @@
 Grobkonzept für eine eigenständige Contao-5.7-Erweiterung: einfache
 1:1-Textnachrichten zwischen Frontend-Mitgliedern.
 
-Stand: 2026-09-16. Dies ist ein **Konzept**, kein Implementierungsplan.
+Stand: 2026-09-17. Dies ist ein **Konzept**, kein Implementierungsplan.
 Es legt Bausteine, Schnittstellen und Entscheidungen fest; Reihenfolge,
 Aufwand und Detailschritte folgen später.
 
@@ -84,7 +84,7 @@ Diese Punkte wurden bewusst festgelegt und gelten für die erste Version:
 | --- | --- |
 | Konversationsform | ausschließlich 1:1, keine Gruppen |
 | Löschen / Editieren durch Nutzer | nein |
-| Blockierliste | nein, Zugang regelt allein der Kontakt-Provider |
+| Blockierliste | nein, Zugang regelt allein der Kontakt-Provider; Stummschalten pro Konversation ja |
 | Einbindung | Content-Element auf einer projektseitig angelegten Seite |
 | Konfiguration | Symfony-Bundle-Config, keine Felder am Content-Element |
 | Anhänge, Formatierung, Emoji-Picker, Reaktionen | nein, reiner Text |
@@ -134,6 +134,9 @@ src/
   Contact/ContactProviderInterface.php
   Contact/ContactProviderRegistry.php
   Contact/ContactFactory.php
+  Contact/ContactResolver.php
+  Contact/ContactService.php
+  Contact/Viewer.php
   Contact/Provider/MemberGroupsContactProvider.php
   Contact/Provider/SharedGroupsContactProvider.php
   ContaoManager/Plugin.php
@@ -148,13 +151,14 @@ src/
   Exception/…                      (Domain-Exceptions mit Status + Translation-Key)
   Gateway/{ConversationGateway,ParticipantGateway,MessageGateway}.php
   Security/Voter/ConversationVoter.php
-  Service/{ConversationService,MessageService,ReadTracker,PollingPolicy,
-           FrontendMemberProvider,MemberDataEraser,MessageTextSanitizer}.php
+  Service/{ConversationService,MessageService,ReadTracker,MuteService,PollingPolicy,
+           FrontendMemberProvider,MemberDataEraser,MessageTextSanitizer,
+           ConversationUrlGenerator}.php
   Twig/ChatRuntime.php              (#[AsTwigFunction] member_chat_unread_badge)
   View/{ChatViewFactory,TurboResponseFactory,Model/…}.php
 contao/
   config/config.php                 (BE_MOD, TL_MODELS falls nötig)
-  dca/{tl_chat_conversation,tl_chat_participant,tl_chat_message,tl_content}.php
+  dca/{tl_chat_conversation,tl_chat_participant,tl_chat_message,tl_content,tl_page}.php
   templates/.twig-root
   templates/content_element/member_chat.html.twig
   templates/member_chat/…
@@ -214,6 +218,8 @@ Seiten wird abgefangen und auf die bestehende Zeile umgeleitet.
 | `joinedAt` | int | |
 | `lastReadAt` | int, Default 0 | |
 | `lastReadMessageId` | int, Default 0 | Basis des Ungelesen-Zählers |
+| `lastPageId` | int, Default 0 | zuletzt benutzte Chat-Seite, für Deep-Links |
+| `muted` | char(1), Default '' | Konversation stummgeschaltet (Contao-Boolean) |
 
 Indizes: **`UNIQUE(pid, member)`**, Index `member`.
 
@@ -239,7 +245,15 @@ Indizes: `(pid, id)`, Index `author`.
 Kein `deletedAt`, kein `editedAt`: Nutzer dürfen weder löschen noch
 editieren. Backend-Moderation löscht hart (Abschnitt 9).
 
-### 3.4 Referentielle Integrität
+### 3.4 Erweiterung `tl_page`
+
+Root-Seiten erhalten ein Feld `memberChatPage` (`int`, Seitenauswahl per
+`pageTree`-Picker, Palette `root` und `rootfallback`). Es benennt die
+Chat-Seite dieses Roots und dient als Fallback für Deep-Links, wenn ein
+Empfänger den Chat noch nie geöffnet hat. Mehrsprachige Projekte pflegen
+so pro Sprach-Root eine eigene Chat-Seite, ohne Bundle-Config.
+
+### 3.5 Referentielle Integrität
 
 DCA-Deklarationen, damit `DC_Table` die Kaskade selbst erledigt:
 
@@ -251,10 +265,12 @@ DCA-Deklarationen, damit `DC_Table` die Kaskade selbst erledigt:
 
 Nicht abgedeckt ist das Verschwinden eines Mitglieds (Abschnitt 10).
 
-### 3.5 Ungelesen-Zähler
+### 3.6 Ungelesen-Zähler
 
 Kein Zähler-Cache. Der Wert ergibt sich aus
-`COUNT(m.id) WHERE m.pid = p.pid AND m.id > p.lastReadMessageId AND m.author <> :me`.
+`COUNT(m.id) WHERE m.pid = p.pid AND m.id > p.lastReadMessageId AND m.author <> :me AND p.muted = ''`.
+Stummgeschaltete Konversationen zählen weder im Badge noch in der Liste;
+die Liste zeigt für sie ein Stumm-Symbol statt der Zahl.
 Für die Liste wird das als ein Join pro Anfrage gerechnet; bei den
 erwarteten Datenmengen (Mitgliederchat, keine Massenkommunikation) ist das
 ausreichend. Sollte es sich als Engpass zeigen, ist eine denormalisierte
@@ -278,31 +294,61 @@ interface ContactProviderInterface
 {
     public static function getAlias(): string;
 
-    /** @return list<Contact> */
-    public function search(int $viewerId, string $query, int $limit): array;
+    /**
+     * Treffer für den Viewer. Ohne Selbstausschluss, Normalisierung des
+     * Suchbegriffs und Deckelung des Limits; das erledigt der ContactService.
+     *
+     * @return list<Contact>
+     */
+    public function search(Viewer $viewer, string $query, int $limit): array;
 
-    public function find(int $viewerId, int $memberId): ?Contact;
+    /**
+     * Darf asymmetrisch sein: canContact(A, B) und canContact(B, A) dürfen
+     * sich unterscheiden. Wird nur beim Anlegen einer Konversation geprüft.
+     */
+    public function canContact(Viewer $viewer, int $memberId): bool;
+}
 
-    public function canContact(int $viewerId, int $memberId): bool;
+final readonly class Viewer
+{
+    /** @param list<int> $groupIds aktive Gruppen des Mitglieds */
+    public function __construct(public int $memberId, public array $groupIds) {}
 }
 ```
 
 * `search` liefert Treffer für die Kontaktsuche, bereits gefiltert nach dem,
-  was `viewerId` sehen darf. Der Provider bestimmt Suchfelder und Sortierung.
-* `find` liefert einen einzelnen Kontakt für die Anzeige (Name des
-  Gesprächspartners in Liste und Fenster).
+  was der Viewer sehen darf. Der Provider bestimmt Suchfelder und
+  Sortierung.
 * `canContact` ist die serverseitige Wahrheit beim **Anlegen** einer
   Konversation. Sie wird immer geprüft, unabhängig davon, wie die
   Mitglieds-ID in den Request kam.
+* Kein `find` im Provider. Die Anzeige eines Gesprächspartners in Liste und
+  Fenster ist eine andere Aufgabe als die Suche nach erlaubten Kontakten:
+  Seit Entscheidung 1 bleiben Konversationen bestehen, auch wenn der
+  Provider den Partner nicht mehr liefert. Die Anzeige übernimmt ein
+  `ContactResolver` (4.2a), der unabhängig vom Provider arbeitet.
 
-Bestehende Konversationen bleiben sichtbar, auch wenn `canContact` später
-`false` liefert. Dann wird nur das Starten neuer Konversationen verhindert.
-Ob auch das Weiterschreiben in einer bestehenden Konversation verboten sein
-soll, ist ein offener Punkt (Abschnitt 12).
+Bestehende Konversationen bleiben lesbar und beschreibbar, auch wenn
+`canContact` später `false` liefert. Dann wird nur das Starten neuer
+Konversationen verhindert (Abschnitt 13, Entscheidung 1). Asymmetrie ist
+gewollt: Ein Trainer darf Mitglieder anschreiben, die ihn selbst nicht
+finden; sie können in der bestehenden Konversation antworten.
 
-Die Übergabe von `int $viewerId` statt `FrontendUser` hält die Provider
-frei von Contao-Klassen und testbar. Die ID kommt aus dem
-`FrontendMemberProvider` (Security-Token, `instanceof FrontendUser`).
+**`Viewer` statt `int $viewerId`.** Beide mitgelieferten Provider und die
+meisten Projekt-Provider brauchen die Gruppen des Suchenden. Der
+`ContactService` baut das Objekt einmal pro Request aus der
+Mitgliedszeile; Provider laden nichts nach. `Viewer` bleibt bewusst
+getrennt von `Contact`: `Contact` beschreibt ein Mitglied für andere und
+wandert in Templates, `Viewer` beschreibt den Fragenden mit
+Autorisierungsdaten und bleibt serverseitig. Gruppen fremder Mitglieder
+gehören nicht in ein Objekt, das Twig erreicht.
+
+**`ContactService` vor dem Provider.** Querschnittslogik liegt an einer
+Stelle statt in jedem Provider: Suchbegriff trimmen, Mindestlänge und
+Limit aus der Config anwenden, den Viewer selbst aus den Treffern
+entfernen, Dubletten nach `memberId` verwerfen, `canContact` für die
+eigene ID immer mit `false` beantworten. Controller sprechen nur mit dem
+`ContactService`, nie direkt mit einem Provider.
 
 ### 4.2 `Contact` (Domain) und `ContactFactory`
 
@@ -354,6 +400,16 @@ Entscheidung gegen `MemberModel` als DTO: Provider können Kontext
 mitliefern, den das Member nicht hat, die Namens- und Avatar-Logik liegt an
 genau einer Stelle, und Provider sowie Voter sind ohne Datenbank testbar.
 
+### 4.2a `ContactResolver`
+
+Liefert `Contact`-Objekte für **bekannte** Mitglieder, unabhängig vom
+Provider: Gesprächspartner in Liste und Fenster, Autor einer Nachricht,
+Empfängername im Push. Methoden `resolve(int $memberId): Contact` und
+`resolveMany(list<int> $memberIds): array<int, Contact>` für die Liste ohne
+N+1. Gelöschte oder unbekannte Mitglieder ergeben einen Platzhalter-Kontakt
+(„Gelöschtes Mitglied", `memberId = 0`), damit Templates nie mit `null`
+umgehen müssen. Intern `MemberModel`-Finder plus `ContactFactory`.
+
 ### 4.3 Registry und Konfiguration
 
 `ContactProviderRegistry` erhält alle getaggten Provider per
@@ -368,7 +424,7 @@ Bundle-Config und werden dem Provider als Konstruktor-Argument gereicht.
 
 | Alias | Verhalten | Optionen |
 | --- | --- | --- |
-| `member_groups` | Alle aktiven Mitglieder aus konfigurierten Gruppen, ohne den Suchenden selbst | `groups: [int]` |
+| `member_groups` | Alle aktiven Mitglieder aus konfigurierten Gruppen | `groups: [int]` |
 | `shared_groups` | Alle aktiven Mitglieder, die mindestens eine Gruppe mit dem Suchenden teilen | keine |
 
 Beide filtern `disable = ''`, `login = '1'` sowie `start`/`stop`, suchen
@@ -409,12 +465,22 @@ Ohne auto_item  (/chat)           Mit auto_item  (/chat/<uuid>)
 ```
 
 * **Listenansicht** (kein Item): Suche oben, Konversationen darunter. Ein
-  Tipp auf eine Konversation ist ein normaler Link auf `/chat/<uuid>`. Mit
-  Turbo Drive ist das ein Seitenwechsel ohne Reload, ohne Drive ein
-  normaler.
+  Tipp auf eine Konversation ist ein Link auf `/chat/<uuid>` mit
+  `data-turbo="true"`. Dasselbe gilt für den Zurück-Link und die
+  Redirects nach dem Kontaktstart. Mit der Drive-Entry ändert das
+  Attribut nichts; mit der `no_drive`-Entry, die lediglich
+  `Turbo.session.drive = false` setzt (verifiziert in
+  `contao-ux-turbo-encore/assets/js/turbo_no_drive.js`), aktiviert es Drive
+  gezielt nur für die Chat-Navigation. Der Wechsel Liste ↔ Konversation
+  läuft so in beiden Konfigurationen ohne vollen Reload. Das README
+  empfiehlt PWA-Projekten trotzdem die Drive-Entry, damit auch der Weg von
+  außen in den Chat ohne Reload läuft.
 * **Konversationsansicht** (Item vorhanden): Kopf mit Zurück-Link auf
-  `/chat` und dem Namen des Gesprächspartners, darunter der Verlauf, unten
-  das Formular. Der Kopf ist statisch gerendert, kein Frame.
+  `/chat`, dem Namen des Gesprächspartners und einem Stumm-Schalter,
+  darunter der Verlauf, unten das Formular. Der Kopf ist statisch
+  gerendert; nur der Schalter liegt in einem kleinen Frame
+  `#chat-mute`, das nie gepollt und nur durch die Antwort des
+  Umschaltens ersetzt wird.
 * **Ab Tablet-Breite** (Breakpoint 768 px in der Bundle-CSS; Custom
   Properties funktionieren in Media Queries nicht, das Projekt überschreibt
   den Wert über eigene Grid-Regeln, siehe 5.7) rendert der CE beide
@@ -432,13 +498,17 @@ Ohne auto_item  (/chat)           Mit auto_item  (/chat/<uuid>)
   geparst; der Voter arbeitet danach intern auf der ID.
 * Der Controller aktiviert den Encore-Entry `huh_member_chat` per
   `PageAssetsTrait` und setzt `Cache-Control: private, no-store`.
+* Bei geöffneter Konversation schreibt der Controller die aktuelle
+  Seiten-ID (`getPageModel()`) nach `tl_chat_participant.lastPageId`,
+  zusammen mit dem Lesestand. Daraus baut der `ConversationUrlGenerator`
+  später Deep-Links (Abschnitt 7).
 
 Mobile Details, die das Bundle mitbringt:
 
 | Thema | Lösung |
 | --- | --- |
 | Höhe | Konversationsansicht füllt `100dvh` abzüglich Kopf des Projekts (Offset als CSS-Custom-Property `--member-chat-offset-top`, Default 0); der Verlauf scrollt intern, nicht die Seite |
-| Virtuelle Tastatur | `#chat-compose` mit `position: sticky; bottom: 0`; Viewport-Meta des Projekts sollte `interactive-widget=resizes-content` setzen, wird im README dokumentiert |
+| Virtuelle Tastatur | `#chat-compose` mit `position: sticky; bottom: 0`. Android/Chrome: Viewport-Meta des Projekts setzt `interactive-widget=resizes-content` (README, Projektvoraussetzung). iOS/Safari verkleinert den Layout-Viewport nicht; deshalb setzt das Bundle-Skript bei `visualViewport.resize` die Höhe des Wurzelelements auf `visualViewport.height` minus Offset und scrollt den Verlauf ans Ende, wenn er dort war. Nur aktiv, wenn `window.visualViewport` existiert und die Mobilansicht aktiv ist, damit Desktop mit Bildschirmtastatur unberührt bleibt. Test auf echten iOS-Geräten, auch im Standalone-Modus |
 | Eingabe | `<textarea>` mit Auto-Grow bis 5 Zeilen, `enterkeyhint="send"`, `autocomplete="off"`, `autocapitalize="sentences"`; Enter sendet auf Desktop, auf Touch-Geräten macht Enter einen Umbruch und der Senden-Button sendet |
 | Scrollen | Nach dem Laden und nach eigener Nachricht ans Ende; bei eingehenden Nachrichten nur, wenn der Nutzer bereits am Ende war, sonst Hinweis „Neue Nachrichten ↓" |
 | Touch-Ziele | mindestens 44 × 44 px für Listeneinträge, Zurück, Senden, Suchtreffer |
@@ -452,6 +522,10 @@ Skript nach dem Muster aus dem QnA-Bundle: Frames mit `data-chat-poll`
 werden entdeckt, per `frame.reload()` neu geladen, Intervalle kommen aus
 `data-chat-poll-interval` und `data-chat-poll-max-interval`. Verhalten:
 
+* Frame-Registrierung über `turbo:load` und einen `MutationObserver`,
+  Aufräumen aller Timer bei `turbo:before-cache`, damit das Skript unter
+  Turbo Drive über Seitenwechsel hinweg korrekt arbeitet (Muster aus dem
+  QnA-Bundle).
 * Exponentielles Backoff bei Fehlern, gedeckelt auf das Maximum.
 * Pause bei `document.hidden`, Neustart bei Sichtbarkeit.
 * Kein Reload, während der Frame `busy` ist (laufende Anfrage). Eine
@@ -461,6 +535,11 @@ werden entdeckt, per `frame.reload()` neu geladen, Intervalle kommen aus
   niemals gepollt, nur durch die Stream-Antwort nach dem Senden ersetzt.
 * Kein Reload für Frames, die `checkVisibility()` als unsichtbar meldet
   (auf dem Smartphone ausgeblendete Liste).
+* Zwei Poll-Modi pro Frame: Voll-Reload über `frame.reload()` und
+  inkrementell über einen `fetch` auf die Frame-Adresse mit `after` bzw.
+  `since`, dessen Turbo-Stream-Antwort über `Turbo.renderStreamMessage()`
+  angewendet wird. Nach dem Nachladen älterer Einträge (5.3a) bleibt ein
+  Frame dauerhaft im inkrementellen Modus.
 * `refresh="morph"` auf dem Nachrichten-Frame, damit die Scroll-Position
   und ein halb getippter Text erhalten bleiben.
 * Der Nachrichten-Frame scrollt bei neuen Nachrichten nur dann ans Ende,
@@ -488,6 +567,37 @@ Fehlerfall (leer, zu lang, Rate-Limit, kein Zugriff): Antwort ist ein
 HTML-Fragment für `#chat-compose` mit Fehlermeldung und erhaltenem Text,
 Status 422 bzw. 429. Turbo rendert 4xx-Antworten in den Frame.
 
+### 5.3a Nachladen älterer Einträge
+
+**Nachrichten.** Der Verlauf startet mit den letzten `page_size`
+Nachrichten. Oben steht ein Button „Ältere Nachrichten" mit
+`?before=<älteste geladene ID>`. Die Nachrichten-Route antwortet auf
+`before` mit einem Turbo-Stream, der die älteren Nachrichten per `prepend`
+vor die vorhandenen setzt und den Button mit neuem `before`-Wert ersetzt
+oder entfernt, wenn nichts mehr da ist. Ein `IntersectionObserver` auf dem
+Button löst das Nachladen automatisch aus, sobald er sichtbar wird; ein
+Data-Attribut am Frame schaltet das ab, dann bleibt der Klick. Während
+einer laufenden Anfrage ist der Button deaktiviert, damit schnelles
+Wischen nicht mehrere Ladevorgänge auslöst. Die Scroll-Position bleibt
+über `overflow-anchor` erhalten.
+
+Konsequenz für das Polling: Nach einem Nachladen darf der Frame nicht mehr
+voll neu geladen werden, sonst wären die älteren Nachrichten wieder weg.
+Das Skript merkt sich am Frame `data-chat-loaded-before` und pollt danach
+ausschließlich inkrementell mit `after`. Ein Seitenwechsel setzt zurück.
+
+**Konversationsliste.** Gleiche Mechanik, kein hartes Limit: Die Liste
+zeigt `page_size` Konversationen, sortiert nach `lastMessageAt`
+absteigend, und darunter einen Button „Weitere Konversationen" mit
+`?before=<lastMessageAt der letzten>` plus deren ID als Tiebreaker. Antwort
+per Turbo-Stream `append`. Das Polling der Liste lädt weiterhin nur die
+erste Seite voll neu; nachgeladene Einträge bleiben stehen, weil der
+Listen-Frame nach einem Nachladen wie der Nachrichten-Frame in den
+inkrementellen Modus wechselt. Da neue Aktivität eine Konversation nach
+oben schiebt, liefert der inkrementelle Poll der Liste alle Einträge mit
+`lastMessageAt` größer als der zuletzt bekannte Stand; das Skript entfernt
+den alten Eintrag derselben UUID und fügt den neuen oben ein.
+
 ### 5.4 Kontaktsuche
 
 `#chat-search` enthält ein `GET`-Formular mit `data-turbo-frame="chat-search"`
@@ -510,8 +620,12 @@ Sie rendert einen Turbo-Frame mit dem serverseitig berechneten
 Anfangswert und Polling im Badge-Intervall; ohne eingeloggtes Mitglied
 rendert sie nichts. Bei `0` ist der Frame vorhanden, aber leer, damit das
 Polling ihn weiter aktualisiert. Ohne Turbo auf der Seite bleibt der
-Anfangswert stehen. Eine separate Funktion für den nackten Zahlenwert
-gibt es nicht.
+Anfangswert stehen.
+
+Bewusst nicht enthalten: eine Funktion für den nackten Zahlenwert
+(`member_chat_unread_count`). Wer die Zahl als Text braucht, etwa im
+Menüpunkt oder im Seitentitel, kann sie später ohne Bruch als zweite
+Funktion derselben Runtime ergänzen; der Wert liegt dort ohnehin vor.
 
 ### 5.6 Darstellung und Templates
 
@@ -521,8 +635,22 @@ gibt es nicht.
   (`rel="noopener nofollow"`). Keine Markdown-Verarbeitung.
 * CSS im Cascade-Layer `member-chat`, Klassen mit Präfix `member-chat__`.
   Das Bundle liefert eine funktionale Grundgestaltung, keine Theme-Optik.
-* Zeitangaben als `<time datetime>` mit relativer Formatierung
-  („vor 3 Min.") nur clientseitig, um Cache- und Zeitzonenfragen zu vermeiden.
+* Zeitangaben als `<time datetime>`: Server-Inhalt im Seitenformat,
+  clientseitig ersetzt durch relative Form in Gerätezeitzone
+  (Abschnitt 13, Entscheidung 5). Tagestrenner serverseitig.
+
+### 5.6a Barrierefreiheit
+
+| Stelle | Maßnahme |
+| --- | --- |
+| Eintreffende Nachrichten | Verlauf als `role="log"` mit `aria-live="polite"`; nur Hinzugefügtes wird angekündigt. Während des Nachladens älterer Nachrichten (`prepend`) setzt das Skript `aria-live="off"` und danach zurück |
+| Fokus nach dem Senden | Die Stream-Antwort ersetzt `#chat-compose`; das Skript setzt den Fokus in `turbo:before-stream-render` zurück ins neue Textfeld (Fokus-Merkliste nach dem Muster des QnA-Skripts). Bei Fehlerantwort (422/429) bleibt der Fokus im Textfeld, die Fehlermeldung ist per `aria-describedby` verknüpft |
+| Ungelesen-Badge | `aria-label` mit Text („3 ungelesene Nachrichten"), Frame `aria-live="off"`, damit das Polling nicht vorliest |
+| Bedienelemente | Buttons statt klickbarer `div`s; sichtbarer Fokusring über `--member-chat-accent`; `<label>` für Textfeld und Suchfeld, visuell versteckt; Stumm-Schalter als `<button aria-pressed>` |
+| Tagestrenner | als `<h3>` oder `role="separator"` mit Text, nicht nur visuell |
+| Farben | Standardpalette mit Kontrast nach WCAG AA; Projekte, die Properties überschreiben, tragen die Verantwortung selbst (README) |
+| Touch und Tastatur | Touch-Ziele mindestens 44 × 44 px (5.1); alle Aktionen per Tastatur erreichbar; „Ältere laden" auch als Button, nicht nur per Scrollen |
+| Zeitangaben | `<time datetime>` behält den vollständigen Zeitpunkt maschinenlesbar, die relative Form ist nur der sichtbare Text |
 
 ### 5.7 Anpassung durch das Projekt
 
@@ -602,11 +730,12 @@ Fragment. POST-Routen setzen `_token_check: true` und erwarten
 
 | Methode | Pfad | Name | Zweck |
 | --- | --- | --- | --- |
-| GET | `/_member_chat/conversations` | `contao_member_chat_conversations` | Frame: Liste |
-| GET | `/_member_chat/conversations/{uuid}/messages?after={mid}` | `contao_member_chat_messages` | Frame: Verlauf; mit `after` nur Neues als Turbo-Stream `append`; ohne als volles Frame |
+| GET | `/_member_chat/conversations?since={ts}&before={ts},{id}` | `contao_member_chat_conversations` | Frame: Liste; `since` liefert geänderte Einträge als Turbo-Stream, `before` ältere per `append`, ohne beides volles Frame |
+| GET | `/_member_chat/conversations/{uuid}/messages?after={mid}&before={mid}` | `contao_member_chat_messages` | Frame: Verlauf; `after` nur Neues als Turbo-Stream `append`, `before` Ältere als `prepend`, ohne beides volles Frame |
 | GET | `/_member_chat/conversations/{uuid}/compose` | `contao_member_chat_compose` | Frame: Formular |
 | POST | `/_member_chat/conversations/{uuid}/messages` | `contao_member_chat_message_create` | Nachricht senden → Turbo-Stream |
 | POST | `/_member_chat/conversations` | `contao_member_chat_conversation_create` | Konversation finden/anlegen (`member` im Body) → Redirect |
+| POST | `/_member_chat/conversations/{uuid}/mute` | `contao_member_chat_mute` | Stummschalten umschalten (`muted` 0/1 im Body) → Turbo-Stream ersetzt den Schalter |
 | GET | `/_member_chat/contacts?q=…` | `contao_member_chat_contacts` | Frame: Suchergebnis |
 | GET | `/_member_chat/unread` | `contao_member_chat_unread` | Frame: Badge |
 
@@ -633,19 +762,29 @@ ohne Rendern. Das spart Bandbreite und Rendering pro leerem Poll.
 | Service | Aufgabe |
 | --- | --- |
 | `FrontendMemberProvider` | Mitglieds-ID aus dem Security-Token, wirft `AuthenticationRequiredException` |
-| `ConversationService` | `openWith(viewerId, memberId)`: prüft `canContact`, findet oder legt an (Transaktion, UUIDv7 erzeugen, Unique-Konflikt → bestehende Zeile), dispatcht `ConversationCreatedEvent`; liefert die `Conversation` samt UUID für den Redirect |
+| `ConversationService` | `openWith(Viewer, memberId)`: prüft `canContact` über den `ContactService`, findet oder legt an (Transaktion, UUIDv7 erzeugen, Unique-Konflikt → bestehende Zeile), dispatcht `ConversationCreatedEvent`; liefert die `Conversation` samt UUID für den Redirect |
 | `MessageService` | `send(conversationId, authorId, body)`: Zugriff per Voter, Sanitizing, Längen- und Rate-Limit, Insert, `lastMessageAt/Id` aktualisieren, `MessageSentEvent` |
 | `ReadTracker` | `markRead(conversationId, memberId, upToMessageId)`, dispatcht `MessagesReadEvent` nur bei Änderung |
+| `MuteService` | `setMuted(conversationId, memberId, bool)`; wirkt auf Zähler, Liste und Push. Nachrichten kommen weiterhin an, der Absender erfährt nichts |
 | `MessageTextSanitizer` | Trim, Normalisierung von Zeilenumbrüchen, Entfernen von Steuerzeichen, Längenprüfung. Kein HTML-Stripping nötig, da nie HTML ausgegeben wird (Twig-Escaping) |
 | `PollingPolicy` | Intervalle aus `ChatOptions`, wie im QnA-Bundle |
 | `MemberDataEraser` | Anonymisierung bei Mitgliedslöschung (Abschnitt 10) |
+| `ConversationUrlGenerator` | `forConversation(Conversation, int $memberId): ?string`, `listPage(int $memberId): ?string`. Reihenfolge: `lastPageId` des Teilnehmers, sonst `memberChatPage` der Root-Seite (bei mehreren Roots die des ersten veröffentlichten Roots mit gesetztem Feld), sonst `null`. URL-Erzeugung über `contao.routing.content_url_generator` mit der UUID als Parameter. Einzige Stelle für Konversations-URLs: Push, Badge, Redirect nach Kontaktstart, Listen-Links |
 | `ConversationVoter` | Attribut `MEMBER_CHAT_VIEW` auf dem geladenen `Conversation`-Objekt: Mitglied ist Teilnehmer (`memberLow`/`memberHigh`). Kein Lookup per ID aus dem Request, die Auflösung UUID → Datensatz passiert vorher im Gateway |
 
-Rate-Limit: `symfony/rate-limiter` ist in Contao 5.7 vorhanden (wird für den
-Suchindex genutzt). Eigener Limiter `contao_member_chat.message` als Sliding
-Window, Schlüssel = Mitglieds-ID, Default 30 Nachrichten pro Minute.
-Konfigurierbar über die Bundle-Config; das Bundle registriert den Limiter
-selbst im `loadExtension`, damit das Host-Projekt nichts anlegen muss.
+Rate-Limit: `symfony/rate-limiter` ist in Contao 5.7 vorhanden. Das Bundle
+übernimmt das Muster des Core für den Suchindex-Limiter
+(`ContaoCoreExtension`, Abschnitt 14): In `loadExtension` wird eine
+`RateLimiterFactory`-Definition registriert, Policy `sliding_window`,
+Limit und Intervall aus der Config, Speicher `CacheStorage` mit Referenz
+auf `cache.app`. Damit läuft der Limiter prozessübergreifend ohne
+Host-Konfiguration. Optional verweist `message.rate_limiter: <name>` auf
+einen projektweit unter `framework.rate_limiter` definierten Limiter, dann
+wird `limiter.<name>` referenziert und die eigene Definition entfällt.
+Schlüssel ist die Mitglieds-ID. Der Limiter greift beim Senden und beim
+Kontaktstart, nicht bei Polls: Polls sind Lesezugriffe in einem Takt,
+den das Bundle selbst vorgibt, ein Limit dort würde bei zwei offenen Tabs
+sofort greifen.
 
 ---
 
@@ -683,8 +822,7 @@ kennt den Chat. Geprüfte Voraussetzungen im PWA-Bundle:
   Klick ist zu prüfen (Notification-Click landet derzeit über
   `notificationClickEvent` am Model).
 
-Empfohlener Aufbau des Listeners (im PWA-Bundle als optionale Integration
-oder im Projekt):
+Aufbau des Listeners im Brücken-Paket (Abschnitt 13, Entscheidung 3):
 
 1. `#[AsEventListener]` auf `MessageSentEvent`.
 2. Listener legt nur eine Messenger-Message `SendChatPushMessage(messageId, recipientIds)`
@@ -695,7 +833,9 @@ oder im Projekt):
 3. Der Handler lädt Nachricht und Subscriber nach `member IN (recipientIds)`,
    baut eine `DefaultNotification` (Titel „Neue Nachricht von …", Body
    gekürzt) und ruft den Sender.
-4. Optional: kein Push, wenn der Empfänger die Konversation in den letzten
+4. Kein Push an Empfänger, die die Konversation stummgeschaltet haben
+   (`tl_chat_participant.muted`).
+5. Optional: kein Push, wenn der Empfänger die Konversation in den letzten
    n Sekunden gepollt hat (er ist gerade aktiv). Dafür genügt ein Blick auf
    `tl_chat_participant.lastReadAt`.
 
@@ -782,9 +922,10 @@ contao_member_chat:
         max_interval_multiplier: 8     # Backoff-Deckel
     message:
         max_length: 2000
-        rate_limit: 30                 # Nachrichten pro Minute und Mitglied
+        rate_limit: 30                 # Nachrichten bzw. Kontaktstarts pro Minute und Mitglied
+        rate_limiter: null             # optional: Name eines Limiters aus framework.rate_limiter
     list:
-        page_size: 50                  # Nachrichten pro Frame-Ladung
+        page_size: 50                  # Nachrichten bzw. Konversationen pro Ladung und Nachladeschritt
         search_limit: 20
         search_min_length: 2
     contact:
@@ -803,33 +944,98 @@ Konstruktor.
 
 ---
 
-## 13. Offene Punkte
+## 12b. Teststrategie
 
-Diese Fragen ändern den Aufwand spürbar und sollten vor dem Plan geklärt
-werden:
+| Ebene | Umfang | Werkzeug |
+| --- | --- | --- |
+| Unit, ohne Datenbank | Kontakt-Provider, `ContactFactory`, `MessageTextSanitizer`, `ConversationVoter`, `PollingPolicy`, `ConversationUrlGenerator`, Ableitung `memberLow`/`memberHigh`; Gateways gemockt | PHPUnit 12 |
+| Gateway, echte Datenbank | Unique-Konflikt beim gleichzeitigen Anlegen, Ungelesen-Zähler mit `muted`, `before`/`after`-Fenster für Nachrichten und Liste, Anonymisierung, Kaskade | `contao/test-case` mit Testverbindung, etwa ein Dutzend Fälle |
+| Integration | Container-Build, Routen, Migration, Backend-Modul, manueller Durchlauf; Testmitglieder in zwei Gruppen, damit beide Provider prüfbar sind | DDEV-Projekt per Symlink, Zugang in `AGENTS.local.md` wie im QnA-Bundle |
+| Browser, manuell | Checkliste im Repository: zwei Browser nebeneinander, Senden und Poll, Tab im Hintergrund, Nachladen nach oben, leerer Text, Rate-Limit, Stummschalten, Fokus nach Senden, iOS-Gerät echt und im Standalone-Modus | Checkliste `.docs/BROWSER_CHECKLIST.md` |
+| Browser, automatisiert | Späterer Ausbau, nicht in der ersten Version | Playwright gegen das DDEV-Projekt |
 
-1. **Weiterschreiben nach Provider-Entzug.** Darf in einer bestehenden
-   Konversation weiter geschrieben werden, wenn `canContact` inzwischen
-   `false` liefert? Vorschlag: ja, lesen und schreiben bleiben erlaubt,
-   nur neue Konversationen sind gesperrt. Einfacher und für Nutzer
-   nachvollziehbar.
-2. **Breakpoint und Desktop-Variante.** Reicht die reine Mobilansicht für
-   die erste Version, sodass die zweispaltige Desktop-Darstellung als
-   spätere Ergänzung kommt? Vorschlag: beide von Anfang an, weil die
-   Desktop-Variante nur CSS plus die Sichtbarkeitsprüfung im Polling ist.
-3. **Push-Listener-Ort.** Im PWA-Bundle als optionale Integration (mit
-   `conflict`/`suggest` in `composer.json`) oder als drittes, kleines
-   Brücken-Paket? Vorschlag: im PWA-Bundle, geschützt durch
-   `class_exists(MessageSentEvent::class)`.
-4. **Ziel-URL im Push.** Der Klick auf die Push-Nachricht soll die
-   Chat-Seite mit der Konversation öffnen. Dafür muss der Listener die
-   Chat-Seite kennen. Vorschlag: `page_id` in der Bundle-Config des Chats
-   optional, damit der Chat selbst URLs zu Konversationen erzeugen kann
-   (`ChatUrlGenerator`). Ohne Angabe liefert er `null`, der Push öffnet
-   die Startseite.
-5. **Zeitzone und Datumsformat** im Verlauf: Contao-Seitenformat
-   (`$objPage->datimFormat`) oder relative Zeit per JS? Vorschlag: beides,
-   `<time datetime>` mit Server-Fallback im Format der Seite.
+Dev-Abhängigkeiten: `contao/core-bundle:^5.7`, `contao/test-case`,
+`phpunit/phpunit:^12`, `phpstan/phpstan` mit Symfony-Extension,
+`friendsofphp/php-cs-fixer`; `phpunit.xml.dist` im Repository.
+
+## 12a. Todo
+
+* ~~Das Interface noch einmal besprechen.~~ Erledigt 2026-09-17, siehe
+  Entscheidung 14.
+
+## 13. Entscheidungen
+
+Alle im Gespräch geklärten Punkte, chronologisch. Jeder Eintrag nennt
+den Abschnitt, in dem die Entscheidung eingearbeitet ist.
+
+1. **Weiterschreiben nach Provider-Entzug.** Entschieden 2026-09-16: Lesen
+   und Schreiben bleiben erlaubt, `canContact` wird nur beim Anlegen einer
+   Konversation geprüft. Der Provider steuert, wer sich finden kann, nicht
+   wer sich schreiben darf. `MessageService::send` bleibt so aufgebaut, dass
+   eine spätere Prüfung pro Nachricht ohne Interface-Änderung ergänzt werden
+   kann.
+2. **Desktop-Variante.** Entschieden 2026-09-16: Mobil- und Desktop-Layout
+   von Anfang an, wie in 5.1 beschrieben. Der Server rendert bei geöffneter
+   Konversation beide Bereiche, CSS entscheidet über die Anordnung, das
+   Polling überspringt unsichtbare Frames.
+3. **Push-Listener-Ort.** Entschieden 2026-09-16: eigenes Brücken-Paket
+   (Arbeitstitel `heimrichhannot/contao-member-chat-pwa`), das beide Bundles
+   als Abhängigkeit hat. Chat- und PWA-Bundle wissen nichts voneinander. Das
+   Chat-Bundle stellt dafür als stabile API bereit: die Event-Klassen,
+   `MessageGateway::find(int)`, `Conversation` mit `uuid` sowie die
+   Stummschalt- und Lesestand-Informationen aus `tl_chat_participant`.
+   Aufbau des Listeners wie in 8.2 beschrieben.
+4. **Ziel-URL im Push, mehrere Roots und Sprachen.** Entschieden 2026-09-16:
+   Der Chat-Controller merkt sich beim Laden die aktuelle Seite in
+   `tl_chat_participant.lastPageId`. Fallback ist ein Seitenauswahl-Feld
+   `memberChatPage` an der Root-Seite (`tl_page`, Typ `root`), das
+   Redakteure pflegen. Ein `ConversationUrlGenerator` im Chat-Bundle ist die
+   einzige Stelle, die Konversations-URLs baut (Push, Badge, Redirects); er
+   nutzt `contao.routing.content_url_generator`. Keine `page_id` in der
+   Bundle-Config.
+5. **Zeitformat im Verlauf.** Entschieden 2026-09-16: beides. Der Server
+   rendert `<time datetime="…">` mit dem Seitenformat (`datimFormat`) als
+   Inhalt, JavaScript ersetzt den Inhalt bei jedem Laden und Frame-Reload
+   durch eine relative Angabe in Gerätezeitzone über
+   `Intl.RelativeTimeFormat` und `Intl.DateTimeFormat`, Sprache aus dem
+   `lang`-Attribut. Tagestrenner („Heute", „Gestern", Wochentag) rendert der
+   Server. Keine Bibliothek.
+6. **Nachladen älterer Nachrichten und Konversationen.** Entschieden
+   2026-09-16: Button mit `IntersectionObserver` für beide Listen, kein
+   hartes Limit, Schrittweite `page_size`. Details in 5.3a.
+7. **Lesebestätigung.** Entschieden 2026-09-16: nicht anzeigen. Der
+   Lesestand bleibt intern (Ungelesen-Zähler, Push-Unterdrückung). Das
+   Nachrichten-Partial enthält einen leeren Block `message_status`, und das
+   View-Objekt der Nachricht trägt `readByPartner: bool`, damit ein Projekt-
+   Template eine Markierung selbst ergänzen kann.
+8. **Stummschalten.** Entschieden 2026-09-16: aufnehmen, mit Schalter im
+   Kopf der Konversation. Spalte `muted` in `tl_chat_participant`, Route
+   `contao_member_chat_mute`, Auswertung in Ungelesen-Zähler, Liste und
+   Push-Listener. Nachrichten kommen weiterhin an, der Absender erfährt
+   nichts. Kein Blockieren.
+9. **iOS-Tastatur.** Entschieden 2026-09-16: `visualViewport`-Handler im
+   Bundle-Skript plus Viewport-Meta für Android als Projektvoraussetzung.
+   Details in der Tabelle „Mobile Details" in 5.1.
+10. **Turbo Drive.** Entschieden 2026-09-16: Chat-Navigationslinks tragen
+   `data-turbo="true"`, README empfiehlt PWA-Projekten die Drive-Entry.
+   Skript-Lebenszyklus über `turbo:load` und `turbo:before-cache`.
+11. **Barrierefreiheit.** Entschieden 2026-09-16: vollständig aufnehmen,
+   Details in 5.6a. Fokus-Handling gehört ins Skript, Rollen und Labels in
+   die Templates, beides von Anfang an.
+12. **Teststrategie.** Entschieden 2026-09-16: Unit, Gateway und Integration
+   als Pflicht, Browser-Checkliste manuell, Playwright als späterer Ausbau.
+   Details in 12b.
+13. **Rate-Limiter-Speicher.** Entschieden 2026-09-17: eigene
+   `RateLimiterFactory` mit `CacheStorage` auf `cache.app` nach dem Core-
+   Muster, `sliding_window`, optional Verweis auf einen projektweiten
+   Limiter. Gilt für Senden und Kontaktstart, nicht für Polls. Details in
+   Abschnitt 7.
+14. **Kontakt-Provider-Interface.** Entschieden 2026-09-17: `find` aus dem
+   Provider gestrichen, Anzeige über `ContactResolver`; `Viewer`-Wertobjekt
+   (ID und Gruppen) statt `int $viewerId`, bewusst getrennt von `Contact`;
+   `ContactService` übernimmt Selbstausschluss, Normalisierung, Limit und
+   Dubletten zentral; Asymmetrie von `canContact` ist erlaubt und
+   dokumentiert; `getAlias()` bleibt statisch. Details in 4.1 und 4.2a.
 
 ---
 
@@ -849,9 +1055,10 @@ Pfade relativ zu `vendor/contao/core-bundle/`.
 | DCA-Kaskade | `contao/drivers/DC_Table.php::deleteChildren()` folgt `ctable` |
 | `tl_member`-Felder | `contao/dca/tl_member.php`: `firstname`, `lastname`, `username` (unique), `email`, `groups` (multiple, serialisiert), `disable`, `login`, `start`, `stop` |
 | Messenger-Prioritäten | `src/Messenger/Message/{Low,Normal,High}PriorityMessageInterface.php`; Web-Worker in `src/Messenger/WebWorker.php`; Cron-Worker-Konfiguration in `src/DependencyInjection/Configuration.php` (`messenger.workers`) |
-| Rate-Limiter vorhanden | `src/DependencyInjection/ContaoCoreExtension.php` nutzt `Symfony\Component\RateLimiter\RateLimiterFactory`; Paket `symfony/rate-limiter` im Vendor |
+| Rate-Limiter | `src/DependencyInjection/ContaoCoreExtension.php` (Suchindex-Limiter): `RateLimiterFactory`-Definition mit `['id', 'policy', 'limit', 'interval']` und `new Definition(CacheStorage::class, [new Reference('cache.app')])`, alternativ Referenz auf `limiter.<name>`; `vendor/symfony/rate-limiter/Storage/{CacheStorage,InMemoryStorage}.php` |
 | Bild-Auflösung für Avatare | `src/Image/Studio/Studio.php::createFigureBuilder()`; `src/Image/Studio/FigureBuilder.php`: `fromUuid(string)`, `fromFilesModel()`, `setSize()`; `contao/models/FilesModel.php::findByUuid()`; **kein** Avatar-Feld in `contao/dca/tl_member.php` |
 | UUID-Erzeugung | `vendor/symfony/uid/Uuid.php` (`symfony/uid` ist Abhängigkeit von `contao/core-bundle` 5.7); Muster für `binary(16)`-Spalte mit Unique-Index in `contao/dca/tl_files.php` (`uuid`), Erzeugung in `src/Filesystem/Dbafs/Dbafs.php` (`Uuid::v1()->toBinary()`, `Uuid::fromBinary()`) |
+| URL-Erzeugung für Seiten | `src/Routing/ContentUrlGenerator.php::generate(object $content, array $parameters = [], int $referenceType)`; Service `contao.routing.content_url_generator` in `config/services.yaml`; `AbstractFragmentController::getPageModel()` liefert die Seite des Content-Elements |
 | Twig-Attribute | `vendor/twig/twig/src/Attribute/AsTwigFunction.php` (Twig 3.28); Autokonfiguration in `vendor/symfony/twig-bundle/DependencyInjection/TwigExtension.php` (`registerAttributeForAutoconfiguration`) |
 | Turbo im Core | Format `turbo_stream` in `src/ContaoCoreBundle.php`; **keine** Frontend-Einbindung von Turbo im Core, daher `contao-ux-turbo-encore` als Projektvoraussetzung |
 | Template-Hierarchie | `contao/templates/.twig-root`, Auflösung als `@Contao/...` über `src/Twig/Loader/TemplateLocator.php` |
