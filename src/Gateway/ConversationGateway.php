@@ -88,7 +88,7 @@ final readonly class ConversationGateway implements ConversationGatewayInterface
         }
 
         $sql = <<<'SQL'
-            SELECT c.*, p.muted,
+            SELECT c.*, p.muted, GREATEST(c.lastMessageAt, p.tstamp) AS changedAt,
                 COALESCE(partner.member, 0) AS partnerId,
                 last.body AS lastBody, last.author AS lastAuthor, last.createdAt AS lastCreatedAt,
                 COALESCE(unread.total, 0) AS unreadCount
@@ -117,7 +117,7 @@ final readonly class ConversationGateway implements ConversationGatewayInterface
         }
 
         if ($since !== null) {
-            $sql .= ' AND c.lastMessageAt >= :since';
+            $sql .= ' AND GREATEST(c.lastMessageAt, p.tstamp) >= :since';
             $parameters['since'] = $since;
         }
 
@@ -127,13 +127,13 @@ final readonly class ConversationGateway implements ConversationGatewayInterface
             $sql .= ' LIMIT ' . $limit;
         }
 
-        /** @var list<array{id: int|string, uuid: string, memberLow: int|string, memberHigh: int|string, createdAt: int|string, lastMessageAt: int|string, lastMessageId: int|string, muted: string, partnerId: int|string, lastBody: ?string, lastAuthor: int|string|null, lastCreatedAt: int|string|null, unreadCount: int|string}> $rows */
+        /** @var list<array{id: int|string, uuid: string, memberLow: int|string, memberHigh: int|string, createdAt: int|string, lastMessageAt: int|string, lastMessageId: int|string, muted: string, changedAt: int|string, partnerId: int|string, lastBody: ?string, lastAuthor: int|string|null, lastCreatedAt: int|string|null, unreadCount: int|string}> $rows */
         $rows = $this->connection->fetchAllAssociative($sql, $parameters);
         $items = [];
         foreach ($rows as $row) {
             $conversation = $this->hydrate($row);
             $last = $row['lastBody'] === null ? null : new Message($conversation->lastMessageId, $conversation->id, (int) $row['lastAuthor'], $row['lastBody'], (int) $row['lastCreatedAt']);
-            $items[] = new ConversationListItem($conversation, (int) $row['partnerId'], $last, (int) $row['unreadCount'], $row['muted'] !== '');
+            $items[] = new ConversationListItem($conversation, (int) $row['partnerId'], $last, (int) $row['unreadCount'], $row['muted'] !== '', (int) $row['changedAt']);
         }
 
         return $items;

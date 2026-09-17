@@ -12,6 +12,7 @@ final readonly class ConversationListItem
         public ?Message $lastMessage,
         public int $unreadCount,
         public bool $muted,
+        public int $changedAt,
     ) {
     }
 }

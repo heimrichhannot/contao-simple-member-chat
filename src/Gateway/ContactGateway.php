@@ -11,13 +11,15 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
 
-final readonly class ContactGateway implements ContactGatewayInterface
+final class ContactGateway implements ContactGatewayInterface
 {
     private const string ACTIVE = "disable = 0 AND login = 1 AND (start = '' OR start <= ?) AND (stop = '' OR stop > ?)";
 
+    private ?string $displayColumns = null;
+
     public function __construct(
-        private Connection $connection,
-        private ChatOptions $options,
+        private readonly Connection $connection,
+        private readonly ChatOptions $options,
     ) {
     }
 
@@ -109,12 +111,16 @@ final readonly class ContactGateway implements ContactGatewayInterface
 
     private function displayColumns(): string
     {
+        if ($this->displayColumns !== null) {
+            return $this->displayColumns;
+        }
+
         $columns = ['id', 'firstname', 'lastname', 'username'];
         // A configured field may not yet exist (or may have been removed).
         if ($this->options->avatarField !== null && \array_key_exists(strtolower($this->options->avatarField), $this->connection->createSchemaManager()->listTableColumns('tl_member'))) {
             $columns[] = $this->options->avatarField;
         }
 
-        return implode(', ', array_map($this->connection->quoteIdentifier(...), array_unique($columns)));
+        return $this->displayColumns = implode(', ', array_map($this->connection->quoteIdentifier(...), array_unique($columns)));
     }
 }

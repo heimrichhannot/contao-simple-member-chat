@@ -151,8 +151,34 @@ final class GatewaysTest extends DatabaseTestCase
         self::assertSame($second->id, $this->conversations->listForMember(9, 1)[0]->conversation->id);
         self::assertSame($first->id, $this->conversations->listForMember(9, 1, 100, $second->id)[0]->conversation->id);
         self::assertCount(2, $this->conversations->listForMember(9, 1, since: 100));
+        self::assertSame([100, 100], array_column($this->conversations->listForMember(9, 1, since: 100), 'changedAt'));
         self::assertSame([], $this->conversations->listForMember(9, 10, since: 101));
         self::assertSame([], $this->conversations->listForMember(99, 10));
+    }
+
+    public function testSinceIncludesReadAndMuteChangesFromAnotherSession(): void
+    {
+        $conversation = $this->createConversation();
+        $message = $this->messages->insert($conversation->id, 7, 'unread', 100);
+        $this->conversations->updateLastMessage($conversation, $message);
+        self::assertSame(100, $this->conversations->listForMember(9, 10)[0]->changedAt);
+        $other = DriverManager::getConnection($this->connection->getParams());
+        try {
+            $participants = new ParticipantGateway($other);
+            $participants->markRead($conversation->id, 9, $message->id, 200, 42);
+            $items = $this->conversations->listForMember(9, 10, since: 200);
+            self::assertCount(1, $items);
+            self::assertSame(200, $items[0]->changedAt);
+            self::assertSame(100, $items[0]->conversation->lastMessageAt);
+            self::assertSame(0, $items[0]->unreadCount);
+            $participants->setMuted($conversation->id, 9, true, 300);
+            $items = $this->conversations->listForMember(9, 10, since: 300);
+            self::assertTrue($items[0]->muted);
+            self::assertSame(300, $items[0]->changedAt);
+            self::assertSame([], $this->conversations->listForMember(7, 10, since: 200));
+        } finally {
+            $other->close();
+        }
     }
 
     public function testReadPositionNeverRegressesAndTracksPage(): void

@@ -8,6 +8,7 @@
         "contao/core-bundle": "^5.7",
         "contao/manager-plugin": "^2.13",
         "doctrine/dbal": "^3.10",
+        "heimrichhannot/contao-encore-contracts": "^1.5",
         "symfony/rate-limiter": "^7.4",
         "symfony/uid": "^7.4"
     },
@@ -42,5 +43,8 @@
             "contao-components/installer": false
         },
         "sort-packages": true
+    },
+    "suggest": {
+        "heimrichhannot/contao-ux-turbo-encore": "Turbo is provided by the project: activate huh_ux_turbo_encore or huh_ux_turbo_encore_no_drive on the chat page."
     }
 }
