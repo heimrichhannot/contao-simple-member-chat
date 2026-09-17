@@ -78,6 +78,14 @@ assert 'text/vnd.turbo-stream.html' in (p/'send.headers').read_text()
 assert re.search(r'<textarea[^>]*></textarea>', body)
 assert re.search(r'<textarea[^>]*>  </textarea>', (p/'invalid-message.html').read_text())
 assert (p/'empty-poll.html').stat().st_size == 0
+# Turbo rejects a frame response whose <turbo-frame> src references the request URL.
+for name in ['list','messages']:
+    frame=re.search(r'<turbo-frame[^>]*>', (p/(name+'.html')).read_text()).group(0)
+    assert ' src=' not in frame and ' loading=' not in frame, name+' frame response must not carry src'
+for layout in ['legacy','modern']:
+    source=(p/(layout+'.html')).read_text()
+    assert re.search(r'<turbo-frame[^>]*id="chat-messages"[^>]*\ssrc=', source), layout+' page must embed messages frame with src'
+print('Frame responses carry no self-referencing src')
 print('Headers, escaping, form reset, error text preservation and empty poll verified')
 print('Responses saved to '+str(p))
 PY

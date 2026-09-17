@@ -55,6 +55,7 @@ final class MemberChatController extends AbstractContentElementController
                     $template->set($key, $value);
                 }
 
+                $template->set('embedded', true);
                 $template->set('view', $this->reader->read($page, $viewerId, $conversation, includeList: true, includeMessages: true));
             }
         }

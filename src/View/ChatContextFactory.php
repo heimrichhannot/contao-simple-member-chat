@@ -39,6 +39,9 @@ final readonly class ChatContextFactory
             'search_url' => $this->routes->generate('contao_member_chat_contacts'),
             'open_url' => $this->routes->generate('contao_member_chat_conversation_create'),
             'conversation_uuid' => $conversation?->uuid,
+            // Only the embedding page sets src/loading on frames: Turbo rejects a
+            // frame response whose src references the request URL and empties the frame.
+            'embedded' => false,
             'query' => '',
             'contacts' => [],
             'error' => null,
