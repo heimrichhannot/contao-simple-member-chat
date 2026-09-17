@@ -3,7 +3,7 @@
 Grobkonzept für eine eigenständige Contao-5.7-Erweiterung: einfache
 1:1-Textnachrichten zwischen Frontend-Mitgliedern.
 
-Stand: 2026-09-17. Dies ist ein **Konzept**, kein Implementierungsplan.
+Stand: 2026-09-17, ergänzt um Abschnitt 15 nach Abschluss von Phase 1. Dies ist ein **Konzept**, kein Implementierungsplan.
 Es legt Bausteine, Schnittstellen und Entscheidungen fest; Reihenfolge,
 Aufwand und Detailschritte folgen später.
 
@@ -62,7 +62,11 @@ ergänzt um `AGENTS.local.md` für die DDEV-Integrationsumgebung
   `level: max` mit Symfony-, PHPUnit- und Strict-Rules-Extensions
   (`phpstan.neon`); Rector mit `UP_TO_PHP_84`, `UP_TO_CONTAO_57`,
   Attribut-Sets und den Prepared Sets für Dead Code, Code Quality,
-  Type Declarations, Privatization und Early Return (`rector.php`). Pfade
+  Type Declarations, Privatization und Early Return (`rector.php`). Das
+  kumulative Set `UP_TO_CONTAO_57` ist mit aktuellem Rector nicht
+  ausführbar (verweist auf entfernte Symfony-Konstanten); `rector.php`
+  listet die enthaltenen Contao-Sets deshalb einzeln bis `CONTAO_53`.
+  `contao/contao-rector` ist nur als `dev-main` verfügbar. Pfade
   `config/`, `contao/`, `src/`, `tests/`; DCA- und `config.php`-Dateien
   sind bei PHPStan und Rector ausgenommen, weil sie prozedurale
   Contao-Ressourcen sind. Die Extensions `phpstan/phpstan-phpunit` und
@@ -617,8 +621,13 @@ erste Seite voll neu; nachgeladene Einträge bleiben stehen, weil der
 Listen-Frame nach einem Nachladen wie der Nachrichten-Frame in den
 inkrementellen Modus wechselt. Da neue Aktivität eine Konversation nach
 oben schiebt, liefert der inkrementelle Poll der Liste alle Einträge mit
-`lastMessageAt` größer als der zuletzt bekannte Stand; das Skript entfernt
-den alten Eintrag derselben UUID und fügt den neuen oben ein.
+`lastMessageAt` **größer oder gleich** dem zuletzt bekannten Stand,
+ohne Seitenbegrenzung (Phase 1: Sekundenauflösung der Zeitstempel, ein
+striktes `>` könnte Aktivität derselben Sekunde verlieren). Das Skript
+muss deshalb per UUID upserten: alten Eintrag derselben UUID entfernen,
+neuen oben einfügen. Offen für Phase 3: `since` reagiert nur auf
+Nachrichtenaktivität, nicht auf Lesestand- oder Stumm-Änderungen aus
+einem anderen Tab; siehe Abschnitt 15.
 
 ### 5.4 Kontaktsuche
 
@@ -784,7 +793,7 @@ ohne Rendern. Das spart Bandbreite und Rendering pro leerem Poll.
 | Service | Aufgabe |
 | --- | --- |
 | `FrontendMemberProvider` | Mitglieds-ID aus dem Security-Token, wirft `AuthenticationRequiredException` |
-| `ConversationService` | `openWith(Viewer, memberId)`: prüft `canContact` über den `ContactService`, findet oder legt an (Transaktion, UUIDv7 erzeugen, Unique-Konflikt → bestehende Zeile), dispatcht `ConversationCreatedEvent`; liefert die `Conversation` samt UUID für den Redirect |
+| `ConversationService` | `openWith(int $initiatorId, int $memberId)`: prüft `canContact` über `ContactPermissionInterface` (Phase 2 liefert den Adapter zum `ContactService`, der den `Viewer` intern auflöst), findet oder legt an (Transaktion, UUIDv7 erzeugen, Unique-Konflikt → bestehende Zeile), dispatcht `ConversationCreatedEvent`; liefert die `Conversation` samt UUID für den Redirect |
 | `MessageService` | `send(conversationId, authorId, body)`: Zugriff per Voter, Sanitizing, Längen- und Rate-Limit, Insert, `lastMessageAt/Id` aktualisieren, `MessageSentEvent` |
 | `ReadTracker` | `markRead(conversationId, memberId, upToMessageId)`, dispatcht `MessagesReadEvent` nur bei Änderung |
 | `MuteService` | `setMuted(conversationId, memberId, bool)`; wirkt auf Zähler, Liste und Push. Nachrichten kommen weiterhin an, der Absender erfährt nichts |
@@ -1099,3 +1108,30 @@ Geprüft im `contao-pwa-bundle` (Arbeitsstand im Repository):
 **Nicht verifiziert:** Die Transport-Namen `contao_prio_low/normal/high`
 und deren Routing stammen aus `contao/manager-bundle`, das im geprüften
 Vendor-Verzeichnis nicht vorlag. Vor der Umsetzung im Ziel-Projekt prüfen.
+
+---
+
+## 15. Erkenntnisse aus Phase 1
+
+Stand nach Abschluss von Phase 1 (2026-09-17, drei Commits, Bericht unter
+`.docs/build/reports/phase-1-foundation.md`, API-Belege in
+`.docs/build/DECISIONS.md`). Verifiziert wurde gegen `contao/core-bundle`
+5.7.13. Punkte, die das Konzept präzisieren oder für spätere Phasen
+Entscheidungen verlangen:
+
+| Thema | Stand nach Phase 1 | Folge |
+| --- | --- | --- |
+| Berechtigungsnaht | `ConversationService::openWith(int, int)` fragt `ContactPermissionInterface::canContact(int, int)`; Default `DenyContactPermission` verweigert jeden Kontaktstart | Phase 2 ersetzt den Alias durch einen Adapter auf den `ContactService`, der den `Viewer` auflöst. `ConversationService` bleibt unverändert |
+| Rate-Limiter beim Kontaktstart | Der Limiter wird vor der Prüfung auf eine bestehende Konversation verbraucht | Phase 2 verschiebt den Verbrauch hinter die Existenzprüfung: Das Öffnen einer bestehenden Konversation ist kein Kontaktstart |
+| `since` in der Liste | inklusiv, ohne Limit, nur `lastMessageAt`-basiert | Phase 3 upsertet per UUID; für Lesestand- und Stumm-Änderungen aus anderen Tabs braucht die Liste zusätzlich einen periodischen Voll-Reload der ersten Seite oder ein `since` auf `GREATEST(c.lastMessageAt, p.tstamp)`. Entscheidung in Phase 3 |
+| Nachrichtenfenster `after` | liefert die früheste ungesehene Seite chronologisch, nicht die neueste | Phase 3 pollt so lange mit dem letzten gelieferten `after`, bis weniger als `page_size` zurückkommen |
+| Transaktionen | Jeder Service besitzt die Top-Level-Transaktion; verschachtelte Aufrufe werfen `LogicException` | Controller und Listener dürfen Services nie innerhalb einer eigenen Transaktion aufrufen |
+| Events | Nur die drei spezifizierten Events; Mute und Anonymisierung dispatchen nichts. Event-Klassen sind `final` mit `readonly`-Payload, nicht selbst `readonly` (Symfony-`Event` erlaubt das nicht) | Konzepttext „jeder Schreibvorgang endet mit einem Event“ gilt für Anlegen, Senden, Lesen |
+| Gelöschte Teilnehmer | Teilnehmerzeile entfernt, Autor auf `0`, Paar in `memberLow`/`memberHigh` bleibt. Senden in eine Konversation mit nur einem Teilnehmer liefert 403 `read_only` | Anzeige des Partners kommt aus der Teilnehmertabelle; `ContactResolver` liefert für `0` den Platzhalter |
+| Lesestand | `markRead` schreibt `lastReadAt` und `lastPageId` auch dann, wenn sich `lastReadMessageId` nicht ändert; das Event kommt nur bei Änderung | Push-Unterdrückung über `lastReadAt` funktioniert auch bei leeren Polls |
+| Schema | `text` wird zu `LONGTEXT`; Längenprüfung liegt im Sanitizer. `tl_page.memberChatPage` braucht `foreignKey: tl_page.title`, sonst lehnt der `DcaExtractor` die Relation ab | Keine Konzeptänderung |
+| Übersetzungen | Symfony-PHP-Ressourcen brauchen den Tabellenpräfix im Schlüssel (`tl_page.memberChatPage.0`), auch in tabellenspezifischen Domains | Muster für alle weiteren Übersetzungen |
+| Gateways | `final` hinter `*GatewayInterface` für Mocks | Provider und Resolver in Phase 2 folgen demselben Muster |
+| Integrationstests | eigene Datenbank `member_chat_test`, nur die drei Chat-Tabellen werden aufgebaut | Phase 2 muss eine minimale `tl_member` für Provider-Tests ergänzen |
+| Hilfsskript | `.docs/build/verify-host.php` prüft Paletten und Übersetzungen im Host | In Phase 4 nach `tools/` verschieben oder durch einen Integrationstest ersetzen |
+
