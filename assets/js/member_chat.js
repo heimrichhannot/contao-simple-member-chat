@@ -16,6 +16,7 @@ let timeTimer
 let batchId = 0
 const batches = new Map()
 const observedButtons = new WeakSet()
+const observedScrollFrames = new WeakSet()
 
 // Turbo's renderStreamMessage returns void; wait for every wrapped stream render.
 function renderStreams(body) {
@@ -124,11 +125,12 @@ async function loadMore(button) {
         const response = await fetch(button.dataset.chatUrl, { headers: { Accept: 'text/vnd.turbo-stream.html' }, credentials: 'same-origin', signal: state.abort.signal })
         if (!response.ok || !response.headers.get('Content-Type')?.includes('text/vnd.turbo-stream.html')) throw new Error('History request failed')
         const body = await response.text()
-        if (!active || !frame.isConnected) return
+        if (!active || !frame.isConnected || frames.get(frame) !== state) return
         frame.setAttribute('aria-live', 'off')
         frame.dataset.chatLoadedBefore = 'true'
         frame.dataset.chatMode = 'incremental'
         await renderStreams(body)
+        if (frames.get(frame) !== state) return
         frame.dataset.chatBefore = response.headers.get('X-Chat-Before') || ''
         if (restoreFocus) (document.getElementById(button.id) || frame).focus({ preventScroll: true })
         // Stream rendering is complete; do not hold the lock for a repaint.
@@ -144,8 +146,11 @@ async function loadMore(button) {
         else frame.setAttribute('aria-live', live)
         state.loading = false
         button.disabled = false
-        schedule(frame)
-        discover()
+        if (frames.get(frame) === state) {
+            state.dueAt = null
+            schedule(frame)
+            discover()
+        }
     }
 }
 
@@ -153,15 +158,18 @@ function schedule(frame) {
     const state = frames.get(frame)
     if (!state) return
     clearTimeout(state.timer)
-    if (!active || document.hidden || !frame.isConnected) return
     const interval = Number(frame.dataset.chatPollInterval)
     const maximum = Number(frame.dataset.chatPollMaxInterval)
-    state.timer = setTimeout(() => poll(frame), Math.min(interval * 2 ** Math.min(state.failures, 16), maximum))
+    state.dueAt ??= Date.now() + Math.min(interval * 2 ** Math.min(state.failures, 16), maximum)
+    if (!active || document.hidden || !frame.isConnected || state.loading) return
+    state.timer = setTimeout(() => poll(frame), Math.max(0, state.dueAt - Date.now()))
 }
 
 async function poll(frame) {
     const state = frames.get(frame)
-    if (!state) return
+    if (!state || !active) return
+    // A skipped invisible/busy frame waits another interval, avoiding a hot loop.
+    state.dueAt = null
     if (document.hidden || frame.hasAttribute("busy") || !(frame.dataset.chatPoll === "badge" ? frame.parentElement?.checkVisibility() : frame.checkVisibility()) || state.loading) {
         schedule(frame)
         return
@@ -176,6 +184,7 @@ async function poll(frame) {
             } else {
                 await frame.reload()
             }
+            if (!active || !frame.isConnected || frames.get(frame) !== state) return
             if (!frame.hasAttribute("complete")) throw new Error("Frame reload failed")
             if (frame.dataset.chatPoll !== "badge") frame.dataset.chatMode = "incremental"
         } else {
@@ -194,8 +203,9 @@ async function poll(frame) {
                 if (response.status === 204) break
                 if (!response.headers.get("Content-Type")?.includes("text/vnd.turbo-stream.html")) throw new Error("Expected Turbo Stream")
                 const body = await response.text()
-                if (!active || !frame.isConnected) return
+                if (!active || !frame.isConnected || frames.get(frame) !== state) return
                 await renderStreams(body)
+                if (!active || !frame.isConnected || frames.get(frame) !== state) return
                 count = Number(response.headers.get("X-Chat-Count"))
                 if (messages) {
                     // Only delivered poll windows advance this cursor. A concurrent
@@ -212,8 +222,11 @@ async function poll(frame) {
         if (error.name !== "AbortError") state.failures += 1
     } finally {
         state.loading = false
-        schedule(frame)
-        discover()
+        if (frames.get(frame) === state) {
+            state.dueAt = null
+            schedule(frame)
+            discover()
+        }
     }
 }
 
@@ -226,6 +239,7 @@ function scrollBottom() {
 }
 
 function discover() {
+    if (!active) return
     for (const [frame, state] of frames) {
         if (!frame.isConnected) {
             clearTimeout(state.timer)
@@ -235,11 +249,14 @@ function discover() {
     }
     document.querySelectorAll("turbo-frame[data-chat-poll]").forEach(frame => {
         if (frames.has(frame)) return
-        frames.set(frame, { timer: null, failures: 0, loading: false, abort: null })
+        frames.set(frame, { timer: null, dueAt: null, failures: 0, loading: false, abort: null })
         schedule(frame)
         resizeObserver?.observe(frame)
         if (frame.id === "chat-messages") {
-            frame.addEventListener('scroll', () => updateScrollState(frame), { passive: true })
+            if (!observedScrollFrames.has(frame)) {
+                observedScrollFrames.add(frame)
+                frame.addEventListener('scroll', () => updateScrollState(frame), { passive: true })
+            }
             reconcileMessages(frame)
             scrollBottom()
         }
@@ -260,6 +277,10 @@ function discover() {
 
 function start() {
     if (!Turbo) return
+    if (active) {
+        discover()
+        return
+    }
     active = true
     observer?.disconnect()
     resizeObserver?.disconnect()
@@ -297,10 +318,12 @@ window.addEventListener('resize', resizeViewport)
 document.addEventListener('scroll', resizeViewport, { capture: true, passive: true })
 
 document.addEventListener("turbo:load", start)
+document.addEventListener("turbo:render", start)
+window.addEventListener("pageshow", start)
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start)
 else start()
 
-document.addEventListener("turbo:before-cache", () => {
+function stop() {
     active = false
     observer?.disconnect()
     resizeObserver?.disconnect()
@@ -317,9 +340,13 @@ document.addEventListener("turbo:before-cache", () => {
     frames.clear()
     focusCompose = false
     focusMute = false
-})
+}
+
+document.addEventListener("turbo:before-cache", stop)
+window.addEventListener("pagehide", stop)
 
 document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) start()
     for (const frame of frames.keys()) schedule(frame)
 })
 
