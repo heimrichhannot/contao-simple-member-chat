@@ -1241,3 +1241,28 @@ Standard-Ansichtsdaten; Projekt-Templates, die zusätzlichen wechselnden
 Zustand anzeigen, müssen ihn erweitern, sonst unterdrückt der Server
 deren Aktualisierung.
 
+### Erkenntnisse aus Phase 4
+
+Abgeschlossen 2026-09-17, vier Codex-Commits. Automatisierte Prüfungen
+laufen sauber (85 Tests, 526 Assertions, PHPStan, ECS, Rector, Twig,
+Webpack, HTTP-Skript, Host-Smoke-Test).
+
+**Im Browser bestätigt:** Die Badge-Route liefert den Zähler, verlinkt über
+`lastPageId` auf die Chat-Seite, trägt eine übersetzte `aria-label`,
+`aria-live="off"` und `no-store, private`; die Twig-Funktion pinnt die
+Sprache über `_locale`, ein direkter Aufruf ohne Parameter folgt der
+Request-Sprache. Das Polling des Badge-Frames funktioniert grundsätzlich
+(mit 2 s Intervall gemessen). Backend-Modul, schreibgeschützte Listen,
+Label- und Lösch-Callbacks sind über den Host-Smoke-Test registriert.
+
+**Nicht geprüft:** die Backend-Oberfläche selbst, weil dafür eine
+Backend-Anmeldung nötig ist.
+
+**Zwei Fehler im Polling-Skript, unabhängig von Phase 4 eingeführt, aber
+erst jetzt aufgefallen:**
+
+| Fehler | Reproduktion | Wirkung |
+| --- | --- | --- |
+| `turbo:before-cache` stoppt das Polling dauerhaft | Nach vollem Seitenaufbau 3 Polls in 9 s. Danach `turbo:before-cache` ohne Navigation ausgelöst: 0 Polls in 10 s. Weder `pageshow` noch `visibilitychange` stellen den Betrieb wieder her, nur ein vollständiger Seitenaufbau | Der Handler setzt `active = false` und leert die Frame-Liste; nur `turbo:load` baut beides wieder auf. Turbo feuert das Ereignis auch bei `pagehide`. Nach einer Zurück-Navigation aus dem bfcache oder beim Ausblenden in eingebetteten und mobilen Browsern steht der Chat still: keine neuen Nachrichten, kein Badge, ohne jeden Hinweis für den Nutzer |
+| `visibilitychange` startet jedes Intervall neu | Badge mit 30 s Intervall pollte in 38 s kein einziges Mal, während die Sichtbarkeit mehrfach wechselte; derselbe Badge mit 2 s Intervall pollte normal. Liste (15 s) und Verlauf (4 s) liefen weiter | `schedule()` verwirft beim Sichtbarkeitswechsel die Restlaufzeit und beginnt das volle Intervall von vorn. Wer häufig den Tab wechselt, bekommt bei langen Intervallen nie eine Aktualisierung; der Badge ist genau der Fall |
+

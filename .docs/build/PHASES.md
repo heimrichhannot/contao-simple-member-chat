@@ -13,4 +13,5 @@ vorliegt.
 | 3b Frontend-Ausbau | Fixes aus dem 3a-Review (Fragment-Locale, `tstamp`-Churn, Enter-Erkennung, dynamische Höhe, Suche), Nachladen älterer Nachrichten und Konversationen, Stumm-Schalter, Zeitformat mit relativer Anzeige und Tagestrennern, Scroll-Verhalten mit Hinweis auf neue Nachrichten, iOS-Tastatur, vollständige Custom Properties, Rest der Barrierefreiheit, Browser-Checkliste. | 5.3a, 5.5 (Zeit), 5.6a, 5.7, 15, Entscheidungen 5, 6, 8, 9 |
 | 3c Fixes | Fünf Befunde aus dem Browser-Review von 3b: Höhe bei Seiten-Scroll, Mindesthöhe und kompakte Kopfzeile, sichtbarer Stumm-Zustand, Nachlade-Sperre bei verstecktem Tab, Leerlauf-Rendering der Liste. | 15 (Erkenntnisse aus Phase 3b) |
 | 4 Rand | Backend-Modul, Twig-Badge, `ConversationUrlGenerator`, Messenger-Vorbereitung, README, Browser-Checkliste. | 5.5, 7, 9, 12b |
+| 4b Polling-Robustheit | Zwei Befunde aus dem Browser-Review von Phase 4: `turbo:before-cache` stoppt das Polling dauerhaft, `visibilitychange` startet jedes Intervall neu. | 15 (Erkenntnisse aus Phase 4), 5.2 |
 | 5 Brücke | Eigenes Paket `contao-member-chat-pwa` mit Listener, Messenger-Message und Handler. | 8.2, Entscheidung 3 |
