@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace HeimrichHannot\SimpleMemberChatBundle;
 
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
+use HeimrichHannot\SimpleMemberChatBundle\Contact\Provider\MemberGroupsContactProvider;
+use HeimrichHannot\SimpleMemberChatBundle\Contact\Provider\SharedGroupsContactProvider;
+use HeimrichHannot\SimpleMemberChatBundle\DependencyInjection\Compiler\ContactProviderPass;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MessageService;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -19,6 +22,12 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
 class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
 {
     protected string $extensionAlias = 'contao_member_chat';
+
+    public function build(ContainerBuilder $container): void
+    {
+        parent::build($container);
+        $container->addCompilerPass(new ContactProviderPass());
+    }
 
     public function configure(DefinitionConfigurator $definition): void
     {
@@ -95,6 +104,10 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
             '$avatarSize' => $options['contact']['avatar_size'],
             '$providers' => $options['providers'],
         ]));
+
+        foreach ([MemberGroupsContactProvider::class, SharedGroupsContactProvider::class] as $provider) {
+            $container->getDefinition($provider)->setArgument('$options', $options['providers'][$provider::getAlias()] ?? []);
+        }
 
         $limiterId = 'contao_member_chat.rate_limiter';
         if ($options['message']['rate_limiter'] !== null) {

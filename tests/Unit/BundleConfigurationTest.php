@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace HeimrichHannot\SimpleMemberChatBundle\Tests\Unit;
 
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
+use HeimrichHannot\SimpleMemberChatBundle\Contact\Provider\MemberGroupsContactProvider;
+use HeimrichHannot\SimpleMemberChatBundle\Contact\Provider\SharedGroupsContactProvider;
 use HeimrichHannot\SimpleMemberChatBundle\HeimrichHannotSimpleMemberChatBundle;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
@@ -54,6 +56,10 @@ final class BundleConfigurationTest extends TestCase
         self::assertNotNull($extension);
         $extension->load([[
             'providers' => [
+                'member_groups' => [
+                    'groups' => [2],
+                ],
+                'shared_groups' => [],
                 'project' => [
                     'custom' => true,
                 ],
@@ -67,14 +73,19 @@ final class BundleConfigurationTest extends TestCase
         ]], $container);
         self::assertEquals([
             'member_groups' => [
-                'groups' => [],
+                'groups' => [2],
             ],
+            'shared_groups' => [],
             'project' => [
                 'custom' => true,
             ],
         ], $container->getParameter('contao_member_chat.providers'));
         self::assertFalse($container->hasDefinition('contao_member_chat.rate_limiter'));
         self::assertSame('limiter.project_chat', (string) $container->getAlias('contao_member_chat.rate_limiter'));
+        self::assertSame([
+            'groups' => [2],
+        ], $container->getDefinition(MemberGroupsContactProvider::class)->getArgument('$options'));
+        self::assertSame([], $container->getDefinition(SharedGroupsContactProvider::class)->getArgument('$options'));
         self::assertSame(12, $container->getDefinition(ChatOptions::class)->getArgument('$avatarSize'));
     }
 

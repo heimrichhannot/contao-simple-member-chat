@@ -5,10 +5,10 @@ services:
 
     HeimrichHannot\SimpleMemberChatBundle\:
         resource: ../src/
-        exclude: ../src/{Configuration,ContaoManager,Domain,Event,Exception,HeimrichHannotSimpleMemberChatBundle.php}
+        exclude: ../src/{Configuration,ContaoManager,DependencyInjection,Contact/Viewer.php,Domain,Event,Exception,HeimrichHannotSimpleMemberChatBundle.php}
 
     HeimrichHannot\SimpleMemberChatBundle\Service\ContactPermissionInterface:
-        alias: HeimrichHannot\SimpleMemberChatBundle\Service\DenyContactPermission
+        alias: HeimrichHannot\SimpleMemberChatBundle\Service\ContactPermission
 
     HeimrichHannot\SimpleMemberChatBundle\Gateway\ConversationGatewayInterface:
         alias: HeimrichHannot\SimpleMemberChatBundle\Gateway\ConversationGateway
@@ -18,3 +18,6 @@ services:
 
     HeimrichHannot\SimpleMemberChatBundle\Gateway\MessageGatewayInterface:
         alias: HeimrichHannot\SimpleMemberChatBundle\Gateway\MessageGateway
+
+    HeimrichHannot\SimpleMemberChatBundle\Gateway\ContactGatewayInterface:
+        alias: HeimrichHannot\SimpleMemberChatBundle\Gateway\ContactGateway
