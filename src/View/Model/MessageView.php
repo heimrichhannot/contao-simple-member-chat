@@ -15,6 +15,7 @@ final readonly class MessageView
         public int $createdAt,
         public bool $own,
         public bool $readByPartner,
+        public ?DaySeparatorView $daySeparator = null,
     ) {
     }
 }

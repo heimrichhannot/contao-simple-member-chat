@@ -4,15 +4,25 @@ declare(strict_types=1);
 
 namespace HeimrichHannot\SimpleMemberChatBundle\Tests\Integration;
 
+use Contao\CoreBundle\Framework\ContaoFramework;
+use Contao\CoreBundle\Image\Studio\Studio;
+use Contao\CoreBundle\Routing\ContentUrlGenerator;
+use Contao\PageModel;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
+use HeimrichHannot\SimpleMemberChatBundle\Contact\ContactFactory;
+use HeimrichHannot\SimpleMemberChatBundle\Contact\ContactResolver;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Conversation;
 use HeimrichHannot\SimpleMemberChatBundle\Event\ConversationCreatedEvent;
+use HeimrichHannot\SimpleMemberChatBundle\Gateway\ContactGatewayInterface;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ConversationGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\MessageGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ParticipantGateway;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatEventDispatcher;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ChatReader;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatTransaction;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ContactPermissionInterface;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationService;
@@ -20,11 +30,14 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\MemberDataEraser;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MuteService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ReadTracker;
 use HeimrichHannot\SimpleMemberChatBundle\Tests\DatabaseTestCase;
+use HeimrichHannot\SimpleMemberChatBundle\View\ChatViewFactory;
+use HeimrichHannot\SimpleMemberChatBundle\View\DaySeparatorFactory;
 use Psr\Log\NullLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 final class GatewaysTest extends DatabaseTestCase
 {
@@ -181,6 +194,80 @@ final class GatewaysTest extends DatabaseTestCase
         }
     }
 
+    public function testReaderHistoryWindowsExposeOnlyDeliveredCursors(): void
+    {
+        $conversation = $this->createConversation();
+        $ids = [];
+        for ($i = 0; $i < 5; ++$i) {
+            $ids[] = $this->messages->insert($conversation->id, 7, 'history', 100 + $i * 86400)->id;
+        }
+
+        $second = $this->createConversation(3, 9);
+        $third = $this->createConversation(4, 9);
+        $options = new ChatOptions(pageSize: 2);
+        $resolver = new ContactResolver(
+            self::createStub(ContactGatewayInterface::class),
+            new ContactFactory($options, self::createStub(Studio::class), self::createStub(ContaoFramework::class)),
+            self::createStub(TranslatorInterface::class),
+        );
+        $views = new ChatViewFactory($resolver,
+            new ChatPageUrlGenerator(self::createStub(ContaoFramework::class), self::createStub(ContentUrlGenerator::class)),
+            new DaySeparatorFactory(self::createStub(TranslatorInterface::class)),
+        );
+        $reads = new ReadTracker($this->conversations, $this->participants, $this->messages, $this->memberProvider(9), new ChatTransaction($this->connection), new ChatEventDispatcher(new EventDispatcher(), new NullLogger()));
+        $reader = new ChatReader($this->conversations, $this->messages, $this->participants, $reads, $options, $views);
+        $page = $this->createClassWithPropertiesStub(PageModel::class, [
+            'id' => 42,
+            'language' => 'en',
+            'dateFormat' => 'Y-m-d',
+        ]);
+        $initial = $reader->read($page, 9, $conversation, includeList: true, includeMessages: true);
+        self::assertSame([$ids[3], $ids[4]], array_column($initial->messages, 'id'));
+        self::assertSame($ids[3], $initial->beforeMessageId);
+        self::assertSame('0,' . $second->id, $initial->beforeConversation);
+        self::assertSame([$third->uuid, $second->uuid], array_column($initial->conversations, 'uuid'));
+        $older = $reader->read($page, 9, $conversation, includeMessages: true, before: $initial->beforeMessageId);
+        self::assertSame([$ids[1], $ids[2]], array_column($older->messages, 'id'));
+        self::assertSame($ids[1], $older->beforeMessageId);
+        $oldest = $reader->read($page, 9, $conversation, includeMessages: true, before: $older->beforeMessageId);
+        self::assertSame([$ids[0]], array_column($oldest->messages, 'id'));
+        self::assertNull($oldest->beforeMessageId);
+        self::assertSame($ids[4], $this->participants->state($conversation->id, 9)['lastReadMessageId'] ?? null);
+        $lastList = $reader->read($page, 9, includeList: true, beforeTimestamp: 0, beforeId: $second->id);
+        self::assertSame([$conversation->uuid], array_column($lastList->conversations, 'uuid'));
+        self::assertNull($lastList->beforeConversation);
+        $after = $reader->read($page, 9, $conversation, includeMessages: true, after: $ids[0]);
+        self::assertSame([$ids[1], $ids[2]], array_column($after->messages, 'id'));
+        self::assertSame($ids[2], $after->lastMessageId);
+        self::assertNull($after->beforeMessageId);
+    }
+
+    public function testIdleActivityIsThrottledWithoutChangingListCursor(): void
+    {
+        $conversation = $this->createConversation();
+        $message = $this->messages->insert($conversation->id, 7, 'read', 100);
+        self::assertTrue($this->participants->markRead($conversation->id, 9, $message->id, 200, 42));
+        self::assertFalse($this->participants->markRead($conversation->id, 9, 0, 229, 43));
+        self::assertSame(200, $this->participants->state($conversation->id, 9)['lastReadAt'] ?? null);
+        self::assertSame(42, $this->participants->state($conversation->id, 9)['lastPageId']);
+        self::assertFalse($this->participants->markRead($conversation->id, 9, 0, 230, 43));
+        self::assertSame(230, $this->participants->state($conversation->id, 9)['lastReadAt'] ?? null);
+        self::assertSame(43, $this->participants->state($conversation->id, 9)['lastPageId']);
+        self::assertSame(200, $this->conversations->listForMember(9, 10)[0]->changedAt);
+        $next = $this->messages->insert($conversation->id, 7, 'next', 231);
+        self::assertTrue($this->participants->markRead($conversation->id, 9, $next->id, 231, 44));
+        self::assertSame(231, $this->conversations->listForMember(9, 10)[0]->changedAt);
+        $this->participants->setMuted($conversation->id, 9, true, 240);
+        $this->participants->setMuted($conversation->id, 9, true, 250);
+        self::assertSame(240, $this->conversations->listForMember(9, 10)[0]->changedAt);
+        $this->participants->setMuted($conversation->id, 9, false, 260);
+        self::assertSame(260, $this->conversations->listForMember(9, 10)[0]->changedAt);
+        $unthrottled = new ParticipantGateway($this->connection, new ChatOptions(activityThrottle: 0));
+        $unthrottled->markRead($conversation->id, 9, 0, 261, 45);
+        self::assertSame(261, $unthrottled->state($conversation->id, 9)['lastReadAt'] ?? null);
+        self::assertSame(260, $this->conversations->listForMember(9, 10)[0]->changedAt);
+    }
+
     public function testReadPositionNeverRegressesAndTracksPage(): void
     {
         $conversation = $this->createConversation();
@@ -193,7 +280,8 @@ final class GatewaysTest extends DatabaseTestCase
         $state = $this->participants->state($conversation->id, 9);
         self::assertNotNull($state);
         self::assertSame($last->id, $state['lastReadMessageId']);
-        self::assertSame(43, $state['lastPageId']);
+        // Activity-only page changes are throttled along with lastReadAt.
+        self::assertSame(42, $state['lastPageId']);
         self::assertSame(0, $this->participants->unreadCount(9));
     }
 

@@ -8,7 +8,10 @@
         </form>
     {% endblock %}
     {% block results %}
+        <div{{ attrs().set('data-chat-search-results', '').mergeWith(search_results_attributes|default) }}>
         {% if error %}<p role="alert">{{ error|trans }}</p>{% endif %}
+        {% if query|length >= options.searchMinLength and contacts is empty and not error %}<p{{ attrs().set('role', 'status').mergeWith(no_contacts_attributes|default) }}>{{ 'member_chat.no_contacts'|trans }}</p>{% endif %}
         {% for contact in contacts %}{% include '@Contao/member_chat/contact_result.html.twig' %}{% endfor %}
+        </div>
     {% endblock %}
 </turbo-frame>

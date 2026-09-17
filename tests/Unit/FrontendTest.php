@@ -31,6 +31,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\ChatPageUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
 use HeimrichHannot\SimpleMemberChatBundle\Twig\MessageRuntime;
 use HeimrichHannot\SimpleMemberChatBundle\View\ChatViewFactory;
+use HeimrichHannot\SimpleMemberChatBundle\View\DaySeparatorFactory;
 use HeimrichHannot\SimpleMemberChatBundle\View\TurboResponseFactory;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -200,17 +201,56 @@ final class FrontendTest extends ContaoTestCase
         $resolver = new ContactResolver($members, new ContactFactory(new ChatOptions(), self::createStub(Studio::class), self::createStub(ContaoFramework::class)), self::createStub(TranslatorInterface::class));
         $urls = self::createStub(ContentUrlGenerator::class);
         $urls->method('generate')->willReturn('/chat/uuid');
-        $factory = new ChatViewFactory($resolver, new ChatPageUrlGenerator(self::createStub(ContaoFramework::class), $urls));
+        $factory = new ChatViewFactory($resolver, new ChatPageUrlGenerator(self::createStub(ContaoFramework::class), $urls), new DaySeparatorFactory(self::createStub(TranslatorInterface::class)));
         $conversation = new Conversation(1, 'uuid', 7, 9, 0, 100, 11);
-        $view = $factory->create($this->createClassWithPropertiesStub(PageModel::class), 9, [new ConversationListItem($conversation, 7, null, 2, false, 120)], [new Message(10, 1, 9, 'own', 100), new Message(11, 1, 7, 'partner', 100)], 7, 10);
+        $view = $factory->create($this->createClassWithPropertiesStub(PageModel::class), 9, [new ConversationListItem($conversation, 7, null, 2, false, 120)], [new Message(10, 1, 9, 'own', 100), new Message(11, 1, 7, 'partner', 100), new Message(12, 1, 7, 'next day', 100000)], 7, 10, moreMessages: true, moreConversations: true, muted: true);
         self::assertSame('Partner', $view->partner?->displayName);
         self::assertSame('Viewer', $view->messages[0]->author->displayName);
         self::assertTrue($view->messages[0]->own);
         self::assertTrue($view->messages[0]->readByPartner);
         self::assertFalse($view->messages[1]->readByPartner);
-        self::assertSame(11, $view->lastMessageId);
+        self::assertSame(12, $view->lastMessageId);
+        self::assertSame(10, $view->beforeMessageId);
+        self::assertSame('100,1', $view->beforeConversation);
+        self::assertTrue($view->muted);
+        self::assertNotNull($view->messages[0]->daySeparator);
+        self::assertNull($view->messages[1]->daySeparator);
+        self::assertNotNull($view->messages[2]->daySeparator);
+        $empty = $factory->create($this->createClassWithPropertiesStub(PageModel::class), 9);
+        self::assertNull($empty->beforeMessageId);
+        self::assertNull($empty->beforeConversation);
+        self::assertFalse($empty->muted);
         self::assertSame(120, $view->changedAt);
         self::assertSame('uuid', $view->conversations[0]->uuid);
+    }
+
+    public function testDayLabelsUseCalendarDaysAndPageLocale(): void
+    {
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->expects(self::exactly(2))->method('trans')->willReturnCallback(static function (string $id, array $parameters, ?string $domain, ?string $locale): string {
+            self::assertSame('en', $locale);
+
+            return $id;
+        });
+        $days = new DaySeparatorFactory($translator);
+        $today = new \DateTimeImmutable('2026-09-17 12:00:00');
+        self::assertSame('member_chat.today', $days->create($today->getTimestamp(), 'en', 'd/m/Y', $today->getTimestamp())->label);
+        self::assertSame('member_chat.yesterday', $days->create($today->modify('-1 day')->getTimestamp(), 'en', 'd/m/Y', $today->getTimestamp())->label);
+        self::assertSame('Tuesday', $days->create($today->modify('-2 days')->getTimestamp(), 'en', 'd/m/Y', $today->getTimestamp())->label);
+        self::assertSame('10/09/2026', $days->create($today->modify('-7 days')->getTimestamp(), 'en', 'd/m/Y', $today->getTimestamp())->label);
+    }
+
+    public function testWordPrefixSqlEscapesEverySearchPosition(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('quoteIdentifier')->willReturnArgument(0);
+        $connection->expects(self::once())->method('iterateAssociative')->willReturnCallback(static function (string $sql, array $parameters): \Traversable {
+            self::assertSame(6, substr_count($sql, "LIKE ? ESCAPE '!'"));
+            self::assertSame(['Ca!%!_!!%', '% Ca!%!_!!%', 'Ca!%!_!!%', '% Ca!%!_!!%', 'Ca!%!_!!%', '% Ca!%!_!!%'], \array_slice($parameters, 2));
+
+            return new \ArrayIterator([]);
+        });
+        self::assertSame([], new ContactGateway($connection, new ChatOptions())->search([2], 'Ca%_!', 20));
     }
 
     public function testAvatarSchemaCheckIsMemoizedIncludingMissingColumn(): void

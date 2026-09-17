@@ -1,4 +1,9 @@
+{% if history %}
+<turbo-stream{{ attrs().set('action', 'append').set('target', 'chat-conversations').mergeWith(stream_attributes|default) }}><template>{% for item in view.conversations %}{% include '@Contao/member_chat/conversation_list_item.html.twig' %}{% endfor %}</template></turbo-stream>
+<turbo-stream{{ attrs().set('action', 'replace').set('target', 'chat-more-conversations').mergeWith(load_more_stream_attributes|default) }}><template>{% include '@Contao/member_chat/load_more.html.twig' with {kind: 'conversations', cursor: view.beforeConversation, url: list_url} %}</template></turbo-stream>
+{% else %}
 {% for item in view.conversations|reverse %}
 <turbo-stream{{ attrs().set('action', 'remove').set('target', 'chat-conversation-' ~ item.uuid).mergeWith(remove_stream_attributes|default) }}></turbo-stream>
 <turbo-stream{{ attrs().set('action', 'prepend').set('target', 'chat-conversations').mergeWith(prepend_stream_attributes|default) }}><template>{% include '@Contao/member_chat/conversation_list_item.html.twig' %}</template></turbo-stream>
 {% endfor %}
+{% endif %}

@@ -13,11 +13,13 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationService;
 use HeimrichHannot\SimpleMemberChatBundle\Service\FrontendMemberProvider;
 use HeimrichHannot\SimpleMemberChatBundle\Service\MessageService;
+use HeimrichHannot\SimpleMemberChatBundle\Service\MuteService;
 use HeimrichHannot\SimpleMemberChatBundle\View\ChatContextFactory;
 use HeimrichHannot\SimpleMemberChatBundle\View\TurboResponseFactory;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Twig\Environment;
 
@@ -33,6 +35,7 @@ final readonly class ChatActionController
         private ChatContextFactory $contexts,
         private TurboResponseFactory $responses,
         private Environment $twig,
+        private MuteService $mute,
     ) {
     }
 
@@ -69,6 +72,33 @@ final readonly class ChatActionController
         $context['view'] = $this->reader->read($page, $viewerId, $conversation, sent: $message);
 
         return $this->responses->stream($this->twig->render('@Contao/member_chat/sent.stream.html.twig', $context));
+    }
+
+    #[Route('/_member_chat/conversations/{uuid}/mute', name: 'contao_member_chat_mute', requirements: [
+        'uuid' => ConversationAccess::UUID_PATTERN,
+    ], defaults: [
+        '_token_check' => true,
+    ], methods: ['POST'])]
+    public function mute(string $uuid, Request $request): Response
+    {
+        try {
+            $viewerId = $this->members->requireMemberId();
+        } catch (AuthenticationRequiredException) {
+            return $this->responses->html('', 401);
+        }
+
+        $conversation = $this->access->requireUuid($uuid);
+        $page = $this->pages->page($request->request->getInt('page'));
+        $context = $this->contexts->create($page, $conversation);
+        $value = $request->request->getString('muted');
+        if (!\in_array($value, ['0', '1'], true)) {
+            throw new BadRequestHttpException('Expected muted=0 or muted=1.');
+        }
+
+        $this->mute->setMuted($conversation->id, $viewerId, $value === '1');
+        $context['view'] = $this->reader->read($page, $viewerId, $conversation);
+
+        return $this->responses->stream($this->twig->render('@Contao/member_chat/mute.stream.html.twig', $context));
     }
 
     #[Route('/_member_chat/conversations', name: 'contao_member_chat_conversation_create', defaults: [

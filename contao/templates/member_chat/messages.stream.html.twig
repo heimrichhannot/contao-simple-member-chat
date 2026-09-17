@@ -1,1 +1,4 @@
-<turbo-stream{{ attrs().set('action', 'append').set('target', 'chat-messages').mergeWith(stream_attributes|default) }}><template>{% for message in view.messages %}{% include '@Contao/member_chat/message.html.twig' %}{% endfor %}</template></turbo-stream>
+<turbo-stream{{ attrs().set('action', history ? 'prepend' : 'append').set('target', 'chat-messages').mergeWith(stream_attributes|default) }}><template>{% for message in view.messages %}{% include '@Contao/member_chat/day_separator.html.twig' %}{% include '@Contao/member_chat/message.html.twig' %}{% endfor %}</template></turbo-stream>
+{% if history %}
+<turbo-stream{{ attrs().set('action', 'replace').set('target', 'chat-more-messages').mergeWith(load_more_stream_attributes|default) }}><template>{% include '@Contao/member_chat/load_more.html.twig' with {kind: 'messages', cursor: view.beforeMessageId, url: messages_url} %}</template></turbo-stream>
+{% endif %}

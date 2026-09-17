@@ -14,6 +14,7 @@ use HeimrichHannot\SimpleMemberChatBundle\View\ChatContextFactory;
 use HeimrichHannot\SimpleMemberChatBundle\View\TurboResponseFactory;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Twig\Environment;
 
@@ -42,11 +43,22 @@ final readonly class ChatFrameController
 
         $page = $this->pages->page($request->query->getInt('page'));
         $since = $request->query->has('since') ? max(0, $request->query->getInt('since')) : null;
+        $before = $request->query->getString('before');
+        if ($before !== '' && ($since !== null || preg_match('/^(0|[1-9][0-9]*),([1-9][0-9]*)$/D', $before) !== 1)) {
+            throw new BadRequestHttpException('Invalid conversation window.');
+        }
+
+        $cursor = $before === '' ? null : array_map(intval(...), explode(',', $before));
         $context = $this->contexts->create($page);
-        $context['view'] = $this->reader->read($page, $viewerId, includeList: true, since: $since);
-        if ($since !== null) {
+        $context['history'] = $cursor !== null;
+        $context['view'] = $this->reader->read($page, $viewerId, includeList: true, since: $since, beforeTimestamp: $cursor[0] ?? null, beforeId: $cursor[1] ?? null);
+        if ($since !== null || $cursor !== null) {
             $response = $this->responses->stream($this->twig->render('@Contao/member_chat/conversations.stream.html.twig', $context));
-            $response->headers->set('X-Chat-Since', (string) $context['view']->changedAt);
+            if ($cursor !== null) {
+                $response->headers->set('X-Chat-Before', $context['view']->beforeConversation ?? '');
+            } else {
+                $response->headers->set('X-Chat-Since', (string) max($since ?? 0, $context['view']->changedAt));
+            }
 
             return $response;
         }
@@ -68,16 +80,27 @@ final readonly class ChatFrameController
         $conversation = $this->access->requireUuid($uuid);
         $page = $this->pages->page($request->query->getInt('page'));
         $after = $request->query->has('after') ? max(0, $request->query->getInt('after')) : null;
-        $view = $this->reader->read($page, $viewerId, $conversation, includeMessages: true, after: $after);
+        $before = $request->query->has('before') ? $request->query->getInt('before') : null;
+        if ($before !== null && ($before < 1 || $after !== null)) {
+            throw new BadRequestHttpException('Invalid message window.');
+        }
+
+        $context = $this->contexts->create($page, $conversation);
+        $context['history'] = $before !== null;
+        $view = $this->reader->read($page, $viewerId, $conversation, includeMessages: true, after: $after, before: $before);
         if ($after !== null && $view->messages === []) {
             return $this->responses->html('', 204);
         }
 
-        $context = $this->contexts->create($page, $conversation);
         $context['view'] = $view;
-        if ($after !== null) {
+        if ($after !== null || $before !== null) {
             $response = $this->responses->stream($this->twig->render('@Contao/member_chat/messages.stream.html.twig', $context));
-            $response->headers->set('X-Chat-After', (string) $view->lastMessageId);
+            if ($before !== null) {
+                $response->headers->set('X-Chat-Before', (string) $view->beforeMessageId);
+            } else {
+                $response->headers->set('X-Chat-After', (string) $view->lastMessageId);
+            }
+
             $response->headers->set('X-Chat-Count', (string) \count($view->messages));
 
             return $response;
@@ -113,7 +136,7 @@ final readonly class ChatFrameController
         }
 
         $context = $this->contexts->create($this->pages->page($request->query->getInt('page')));
-        $context['query'] = $request->query->getString('q');
+        $context['query'] = trim($request->query->getString('q'));
         $context['contacts'] = $this->contacts->search($request->query->getString('q'));
 
         return $this->responses->html($this->twig->render('@Contao/member_chat/contact_results.html.twig', $context));

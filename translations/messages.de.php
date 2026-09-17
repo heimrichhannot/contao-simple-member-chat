@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    'member_chat.more_messages' => 'Ältere Nachrichten',
+    'member_chat.more_conversations' => 'Weitere Konversationen',
+    'member_chat.mute' => 'Konversation stummschalten',
+    'member_chat.new_messages' => 'Neue Nachrichten ↓',
+    'member_chat.no_contacts' => 'Keine Kontakte gefunden.',
+    'member_chat.today' => 'Heute',
+    'member_chat.yesterday' => 'Gestern',
+
     'member_chat.invalid_text' => 'Ungültige Zeichenkodierung.',
     'member_chat.invalid_length' => 'Geben Sie eine Nachricht innerhalb der maximalen Länge ein.',
     'member_chat.editor_hint' => 'Privater Mitgliederchat: Die Konversation wird über die Seiten-URL gewählt.',

@@ -1,0 +1,3 @@
+{% block new_messages %}
+    <button{{ attrs().addClass('member-chat__new-messages').set('type', 'button').set('data-chat-new-messages', '').set('aria-controls', 'chat-messages').mergeWith(new_messages_attributes|default) }}>{{ 'member_chat.new_messages'|trans }}</button>
+{% endblock %}

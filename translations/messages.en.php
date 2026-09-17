@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    'member_chat.more_messages' => 'Older messages',
+    'member_chat.more_conversations' => 'More conversations',
+    'member_chat.mute' => 'Mute conversation',
+    'member_chat.new_messages' => 'New messages ↓',
+    'member_chat.no_contacts' => 'No contacts found.',
+    'member_chat.today' => 'Today',
+    'member_chat.yesterday' => 'Yesterday',
+
     'member_chat.invalid_text' => 'Invalid message encoding.',
     'member_chat.invalid_length' => 'Enter a message within the maximum length.',
     'member_chat.editor_hint' => 'Private member chat: the conversation is selected through the page URL.',

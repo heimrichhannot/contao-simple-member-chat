@@ -1,0 +1,5 @@
+{% block day_separator %}
+    {% if message.daySeparator %}
+        <div{{ attrs().set('id', 'chat-day-' ~ message.id).addClass('member-chat__day-separator').set('role', 'separator').set('data-chat-day', message.daySeparator.day).set('data-chat-day-message', message.id).mergeWith(day_separator_attributes|default) }}>{{ message.daySeparator.label }}</div>
+    {% endif %}
+{% endblock %}

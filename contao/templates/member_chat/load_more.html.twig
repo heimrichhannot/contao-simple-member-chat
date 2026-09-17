@@ -1,0 +1,5 @@
+{% block load_more %}
+    {% if cursor is not null %}
+        <button{{ attrs().set('id', 'chat-more-' ~ kind).addClass('member-chat__load-more').set('type', 'button').set('data-chat-load-more', kind).set('data-chat-before', cursor).set('data-chat-url', url ~ '&before=' ~ cursor|url_encode).mergeWith(load_more_attributes|default) }}>{{ ('member_chat.more_' ~ kind)|trans }}</button>
+    {% endif %}
+{% endblock %}

@@ -17,6 +17,9 @@ final readonly class ChatView
         public ?Contact $partner,
         public int $lastMessageId,
         public int $changedAt,
+        public ?int $beforeMessageId = null,
+        public ?string $beforeConversation = null,
+        public bool $muted = false,
     ) {
     }
 }
