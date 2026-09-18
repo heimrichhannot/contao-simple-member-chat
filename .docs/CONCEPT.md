@@ -1364,3 +1364,25 @@ sprang von 127 auf 126, `lastMessageAt` wurde angepasst, die
 Nachrichtenzahl ging von 22 auf 21. Das Modul steht in der Navigation
 unter den Mitgliederfunktionen.
 
+### Erkenntnisse aus Phase 6
+
+Abgeschlossen 2026-09-18, drei Codex-Commits. Beide Backend-Befunde sind
+behoben und in der echten Oberfläche nachgeprüft.
+
+| Befund | Vorher | Nachher |
+| --- | --- | --- |
+| Konversationsliste | HTTP 500, `Unknown format specifier` | Liste rendert; Beschriftung „Chat Alice Phase3a ↔ Chat Bob Phase3a, letzte Nachricht: 2026-09-18 08:46"; Gruppenköpfe mit formatiertem Datum |
+| Kopfzeile der Kindliste | roher Zeitstempel `1789653654` | „Letzte Nachricht 2026-09-18 08:46" |
+
+Die Lösung ersetzt die benannten Platzhalter durch positionale `%s` und
+ergänzt `rgxp: datim` am Feld `lastMessageAt`. `tools/verify-host.php`
+rendert jetzt beide Beschriftungen und die Kopfzeile in Deutsch und
+Englisch durch den gebooteten Container, ein Unit-Test fährt die
+Beschriftung durch die echte `vsprintf`-Kette.
+
+**Messhinweis:** Nach Änderungen an Übersetzungen genügt es nicht, den
+`prod`-Cache zu leeren. Das Backend läuft im Demo-Projekt im
+`dev`-Environment; ohne `cache:clear --env=dev` zeigt es weiterhin den
+alten Stand samt altem Stacktrace. Eine erste Nachprüfung meldete
+deshalb fälschlich, der Fix greife nicht.
+
