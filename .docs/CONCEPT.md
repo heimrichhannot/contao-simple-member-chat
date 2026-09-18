@@ -1403,3 +1403,56 @@ vermerkt, ist aber der Anweisung gefolgt. Lehre für weitere Prompts:
 keine konkreten API-Namen vorgeben, wo der Zweck genügt, sonst zementiert
 die Anweisung einen veralteten Weg.
 
+### Push-Funktion im Demo-Projekt geprüft
+
+Durchgeführt am 2026-09-18 im DDEV-Demo. Die Push-Kette ist damit nicht
+mehr nur durch Unit-Tests belegt, sondern bis zum tatsächlich abgesetzten
+HTTP-Request und dessen entschlüsselter Nutzlast.
+
+**Aufbau:** `heimrichhannot/contao-pwa-bundle` 0.10.1 und
+`minishlink/web-push` 8.0 im Demo installiert, VAPID-Schlüsselpaar lokal
+erzeugt und in `config/config.yaml` eingetragen, PWA-Konfiguration „Chat
+Push Demo" mit aktiviertem Push über das Backend angelegt, Chat-Push mit
+`configuration: 1` und `body_length: 80` eingeschaltet. Ein Abonnent für
+Bob wurde mit einem echten P-256-Schlüsselpaar angelegt; sein Endpunkt
+zeigte auf eine lokale Auffangstelle, die den eingehenden Request
+protokolliert.
+
+**Ergebnis:** Eine Nachricht von Alice an Bob löste ohne weiteres Zutun
+einen echten Web-Push-Request aus. Contaos Web-Worker arbeitete die
+Messenger-Nachricht beim `kernel.terminate` ab, ein CLI-Worker war nicht
+nötig. Der Request trug:
+
+* `Authorization: WebPush <JWT>` mit `sub: mailto:demo@example.invalid`
+  und passendem `aud`
+* `Crypto-Key` mit dem konfigurierten VAPID-Public-Key
+* `Content-Encoding: aesgcm`, `TTL: 2419200`, 2865 Byte verschlüsselte
+  Nutzlast
+
+Die Nutzlast wurde mit dem privaten Schlüssel des Abonnenten entschlüsselt
+und enthielt genau das Erwartete:
+
+```json
+{"data":{"clickJumpTo":"https://…/phase3a-chat-legacy/01a0ae9d-…-a415ae1e4ed5.html"},
+ "title":"Chat Alice Phase3a",
+ "body":"Hallo Bob, dies ist der Push-Test."}
+```
+
+Titel ist der Anzeigename des Absenders aus dem `ContactResolver`, der
+Text die gekürzte Nachricht, `clickJumpTo` der absolute Deep-Link auf die
+Konversation.
+
+**Negativfälle bestätigt:** Bei stummgeschalteter Konversation und bei
+einem Empfänger, dessen Lesezeitpunkt innerhalb von
+`active_recipient_grace` lag, wurde kein Request abgesetzt.
+
+**Nicht geprüft:** Anzeige auf einem echten Gerät, Service-Worker-Registrierung
+und die Erteilung der Benachrichtigungsfreigabe im Browser. Dafür ist eine
+Nutzerinteraktion nötig, die hier nicht möglich war.
+
+**Aufräumen:** Auffangstelle, Hilfsskripte, privater Abonnentenschlüssel
+und der Test-Abonnent wurden nach dem Test entfernt. Im Demo bleiben das
+PWA-Bundle, die VAPID-Konfiguration, die PWA-Konfiguration und die
+Chat-Push-Einstellungen bestehen. Die VAPID-Schlüssel gelten nur für dieses
+Demo und gehören nicht in ein anderes Projekt.
+
