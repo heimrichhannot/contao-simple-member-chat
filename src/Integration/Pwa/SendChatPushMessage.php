@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa;
 
-use Contao\CoreBundle\Messenger\Message\LowPriorityMessageInterface;
+use Symfony\Component\Messenger\Attribute\AsMessage;
 
-final readonly class SendChatPushMessage implements LowPriorityMessageInterface
+// Contao's LowPriorityMessageInterface is deprecated since 5.6 and stops working
+// in Contao 6; the core's own messages route through this attribute instead.
+#[AsMessage('contao_prio_low')]
+final readonly class SendChatPushMessage
 {
     /**
      * @param list<int> $recipientIds

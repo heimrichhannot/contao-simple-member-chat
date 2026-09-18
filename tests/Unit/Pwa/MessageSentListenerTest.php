@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace HeimrichHannot\SimpleMemberChatBundle\Tests\Unit\Pwa;
 
-use Contao\CoreBundle\Messenger\Message\LowPriorityMessageInterface;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Conversation;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Message;
 use HeimrichHannot\SimpleMemberChatBundle\Event\MessageSentEvent;
@@ -13,6 +12,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\PushOptions;
 use HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\SendChatPushMessage;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Messenger\Attribute\AsMessage;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -23,11 +23,19 @@ use Symfony\Component\Messenger\Transport\Sender\SendersLocator;
 
 final class MessageSentListenerTest extends TestCase
 {
+    public function testMessageDeclaresTheContaoLowPriorityTransport(): void
+    {
+        $attributes = new \ReflectionClass(SendChatPushMessage::class)->getAttributes(AsMessage::class);
+        self::assertCount(1, $attributes);
+        self::assertSame('contao_prio_low', $attributes[0]->newInstance()->transport);
+        // The deprecated marker interface must not come back.
+        self::assertSame([], class_implements(SendChatPushMessage::class));
+    }
+
     public function testEnqueuesOnlyIdsOnLowPriorityTransport(): void
     {
         $bus = $this->createMock(MessageBusInterface::class);
         $bus->expects(self::once())->method('dispatch')->willReturnCallback(static function (object $queued): Envelope {
-            self::assertInstanceOf(LowPriorityMessageInterface::class, $queued);
             self::assertInstanceOf(SendChatPushMessage::class, $queued);
             self::assertSame(42, $queued->messageId);
             self::assertSame([9, 10], $queued->recipientIds);
@@ -37,7 +45,7 @@ final class MessageSentListenerTest extends TestCase
         new MessageSentListener($bus, new PushOptions(true, 3))($this->event());
     }
 
-    public function testContaoInterfaceRoutingQueuesWithoutCallingHandler(): void
+    public function testContaoTransportRoutingQueuesWithoutCallingHandler(): void
     {
         $transport = $this->createMock(SenderInterface::class);
         $transport->expects(self::once())->method('send')->willReturnArgument(0);
@@ -46,7 +54,7 @@ final class MessageSentListenerTest extends TestCase
         $bus = new MessageBus([
             new SendMessageMiddleware(new SendersLocator(
                 [
-                    LowPriorityMessageInterface::class => ['contao_prio_low'],
+                    SendChatPushMessage::class => ['contao_prio_low'],
                 ],
                 new ServiceLocator([
                     'contao_prio_low' => static fn (): SenderInterface => $transport,

@@ -848,9 +848,10 @@ for development tests of its real classes. No bridge package is created.
 - Conditional service registration requires the PWA sender, notification and
   subscriber/configuration classes. Without them, no integration code loads.
 - An attributed `MessageSentEvent` listener enqueues only message/recipient IDs.
-  `SendChatPushMessage` implements Contao's `LowPriorityMessageInterface`,
-  routed to `contao_prio_low` by the Managed Edition. This interface is deprecated
-  in 5.7; Contao 6 will require migration to the message routing attribute.
+  `SendChatPushMessage` carries `#[AsMessage('contao_prio_low')]`, routed to the
+  Doctrine transport by the Managed Edition. The marker interface
+  `LowPriorityMessageInterface` was used first and replaced on 2026-09-18: it is
+  deprecated since Contao 5.6 and stops working in Contao 6.
 - The handler reloads the message/conversation and participant rows. Missing,
   muted and recently active recipients are skipped. The event recipient list
   never expands. Subscriber queries filter both member and configuration ID.
@@ -1385,4 +1386,20 @@ Beschriftung durch die echte `vsprintf`-Kette.
 `dev`-Environment; ohne `cache:clear --env=dev` zeigt es weiterhin den
 alten Stand samt altem Stacktrace. Eine erste Nachprüfung meldete
 deshalb fälschlich, der Fix greife nicht.
+
+### Korrektur nach Phase 5
+
+Am 2026-09-18 gemeldet und behoben: `SendChatPushMessage` implementierte
+Contaos `LowPriorityMessageInterface`. Diese Schnittstelle ist seit
+Contao 5.6 veraltet und entfällt in Contao 6; der Core selbst nutzt für
+seine eigenen Nachrichten bereits `#[AsMessage('contao_prio_low')]`.
+Die Nachrichtenklasse trägt jetzt dasselbe Attribut und implementiert
+keine Schnittstelle mehr. Ein Test prüft Attribut und Transportnamen und
+schlägt fehl, falls die Schnittstelle zurückkehrt.
+
+Die Ursache lag im Prompt zu Phase 5: Er nannte die Schnittstelle
+ausdrücklich. Codex hat die Veraltung erkannt und in `DECISIONS.md`
+vermerkt, ist aber der Anweisung gefolgt. Lehre für weitere Prompts:
+keine konkreten API-Namen vorgeben, wo der Zweck genügt, sonst zementiert
+die Anweisung einen veralteten Weg.
 

@@ -357,13 +357,14 @@ on installations with several configurations. There is no automatic broadcast
 across configurations. Missing/disabled configurations and empty subscriber
 lists result in no delivery.
 
-The post-commit event listener only enqueues message and recipient IDs. Contao
-Managed Edition routes `LowPriorityMessageInterface` to the Doctrine
-`contao_prio_low` transport; keep that asynchronous routing if overriding
-Messenger configuration. Contao's configured web/cron workers, or
-`bin/console messenger:consume contao_prio_low`, process the queue. The interface
-is deprecated in Contao 5.6 and will need migration to `AsMessage` for Contao 6;
-this bundle currently requires Contao 5.7.
+The post-commit event listener only enqueues message and recipient IDs. The
+queued message declares `#[AsMessage('contao_prio_low')]`, which Contao Managed
+Edition routes to the Doctrine `contao_prio_low` transport; keep that
+asynchronous routing if overriding Messenger configuration. Contao's configured
+web/cron workers, or `bin/console messenger:consume contao_prio_low`, process
+the queue. The deprecated `LowPriorityMessageInterface` is deliberately not
+used: it stops working in Contao 6, and the core's own messages already use the
+attribute.
 
 At execution time the handler reloads the message/conversation and each event
 recipient's participant state. Removed, muted, recently active recipients and
