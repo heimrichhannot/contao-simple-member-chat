@@ -10,7 +10,7 @@ return [
     'tl_chat_conversation.tstamp.0' => 'Modified at',
     'tl_chat_conversation.uuid.0' => 'Public identifier',
     'tl_chat_conversation.id.0' => 'ID',
-    'tl_chat_conversation.summary' => '%first% ↔ %second%, last message: %time%',
+    'tl_chat_conversation.summary' => '%s ↔ %s, last message: %s',
     'tl_chat_conversation.children.0' => 'Messages',
     'tl_chat_conversation.children.1' => 'Show messages',
     'tl_chat_conversation.delete.0' => 'Delete',

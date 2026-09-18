@@ -24,9 +24,9 @@ final readonly class ListLabelLabelListener
     {
         $members = $this->members->forTable('tl_chat_conversation');
         $label = $this->translator->trans('tl_chat_conversation.summary', [
-            '%first%' => ($members[(int) $row['memberLow']] ?? $members[0])->displayName,
-            '%second%' => ($members[(int) $row['memberHigh']] ?? $members[0])->displayName,
-            '%time%' => (int) $row['lastMessageAt'] > 0 ? date('Y-m-d H:i', (int) $row['lastMessageAt']) : '—',
+            ($members[(int) $row['memberLow']] ?? $members[0])->displayName,
+            ($members[(int) $row['memberHigh']] ?? $members[0])->displayName,
+            (int) $row['lastMessageAt'] > 0 ? date('Y-m-d H:i', (int) $row['lastMessageAt']) : '—',
         ], 'contao_tl_chat_conversation');
 
         return htmlspecialchars($label, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
