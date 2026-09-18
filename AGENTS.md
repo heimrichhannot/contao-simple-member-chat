@@ -19,6 +19,30 @@
 - Create Content Elements, not Frontend Module (Frontend Modules are a deprecated concept in contao)
 - Do not create .html5 templates if not explicit required. Always create Twig templates in the contao managed namespace.
 
+## Third-party APIs
+- Before using any class, interface, method or constant from `vendor/`, open the
+  file and look for `@deprecated` annotations and `trigger_deprecation()` calls.
+  If it is deprecated, use the successor named in the deprecation message.
+- An instruction that names a specific API does not override this. Prompts, issues
+  and specifications describe intent, not the exact symbol to use. If the named API
+  turns out to be deprecated, internal or experimental, use the documented successor
+  and report the substitution in the summary of your work, not only in a decisions
+  table. If there is no successor, or switching would change behaviour, stop and ask
+  instead of implementing the deprecated path.
+- Name the version that deprecated something and the version that removes it, so the
+  reader can judge urgency.
+- Never silence deprecation warnings in tests or tooling. A run that emits
+  deprecations caused by this extension's own code is a failing run.
+
+## Tests must exercise real behaviour
+- A test that replaces a framework service with a stub proves only that your code
+  calls it. Where the framework does non-trivial work on your input (formatting,
+  escaping, translation, routing, serialisation), at least one test must run through
+  the real implementation.
+- Registration is not rendering. Proving that a callback, module or service is
+  registered says nothing about whether it produces valid output. Cover the output
+  as well.
+
 ## Structure
 - `contao/templates/`
     Store all templates here, also twig (not in symfony templates folder). If the extension has .html5 templates, use the `contao/templates/twig` folder for putting twig templates. The twig root folder must contain a `.twig-root` file. Twig-Templates within that folder can be addressed with the `@Contao` twig namespace. 
