@@ -84,6 +84,9 @@ $GLOBALS['TL_DCA']['tl_chat_conversation'] = [
             ],
         ],
         'lastMessageAt' => [
+            'eval' => [
+                'rgxp' => 'datim',
+            ],
             'sql' => [
                 'type' => 'integer',
                 'unsigned' => true,
