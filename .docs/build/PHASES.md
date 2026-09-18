@@ -14,4 +14,4 @@ vorliegt.
 | 3c Fixes | Fünf Befunde aus dem Browser-Review von 3b: Höhe bei Seiten-Scroll, Mindesthöhe und kompakte Kopfzeile, sichtbarer Stumm-Zustand, Nachlade-Sperre bei verstecktem Tab, Leerlauf-Rendering der Liste. | 15 (Erkenntnisse aus Phase 3b) |
 | 4 Rand | Backend-Modul, Twig-Badge, `ConversationUrlGenerator`, Messenger-Vorbereitung, README, Browser-Checkliste. | 5.5, 7, 9, 12b |
 | 4b Polling-Robustheit | Zwei Befunde aus dem Browser-Review von Phase 4: `turbo:before-cache` stoppt das Polling dauerhaft, `visibilitychange` startet jedes Intervall neu. | 15 (Erkenntnisse aus Phase 4), 5.2 |
-| 5 Brücke | Eigenes Paket `contao-member-chat-pwa` mit Listener, Messenger-Message und Handler. | 8.2, Entscheidung 3 |
+| 5 Push | Optionale PWA-Push-Integration im Bundle selbst, lose Abhängigkeit: Listener, Messenger-Message und Handler, nur aktiv wenn das PWA-Bundle installiert ist. | 8.2, Entscheidung 3 (revidiert) |

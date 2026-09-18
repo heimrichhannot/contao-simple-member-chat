@@ -1013,7 +1013,12 @@ den Abschnitt, in dem die Entscheidung eingearbeitet ist.
    von Anfang an, wie in 5.1 beschrieben. Der Server rendert bei geöffneter
    Konversation beide Bereiche, CSS entscheidet über die Anordnung, das
    Polling überspringt unsichtbare Frames.
-3. **Push-Listener-Ort.** Entschieden 2026-09-16: eigenes Brücken-Paket
+3. **Push-Listener-Ort.** Entschieden 2026-09-16, **revidiert 2026-09-18**:
+   Der Listener liegt direkt im Chat-Bundle als optionale Integration mit
+   loser Abhängigkeit. `heimrichhannot/contao-pwa-bundle` steht nur unter
+   `suggest`; die Integrationsdienste werden ausschließlich registriert,
+   wenn die Klassen des PWA-Bundles vorhanden sind. Kein eigenes
+   Brücken-Paket. Ursprüngliche Fassung: eigenes Brücken-Paket
    (Arbeitstitel `heimrichhannot/contao-member-chat-pwa`), das beide Bundles
    als Abhängigkeit hat. Chat- und PWA-Bundle wissen nichts voneinander. Das
    Chat-Bundle stellt dafür als stabile API bereit: die Event-Klassen,
@@ -1302,7 +1307,7 @@ Screenshots.
 | 3c Fixes | fünf Befunde aus dem Browser-Review | abgeschlossen |
 | 4 Rand | Backend, Badge, URL-Auflösung, stabile API, README | abgeschlossen |
 | 4b Polling-Robustheit | zwei Lebenszyklus-Fehler im Skript | abgeschlossen |
-| 5 Brücke | eigenes Paket `contao-member-chat-pwa` mit Push-Listener | offen, eigenes Repository |
+| 5 Push | optionale PWA-Integration im Bundle, lose Abhängigkeit | offen |
 
 Offen außerhalb der Phasen:
 
