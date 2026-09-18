@@ -39,8 +39,8 @@ Only 1:1 plain text: no groups, attachments, formatting/Markdown, emoji picker,
 reactions, user editing/deletion, block list, read-receipt UI or server push
 (WebSocket/Mercure/SSE). Unicode text, including typed emoji, is allowed. Muting
 suppresses unread counts and provides a push opt-out; messages still arrive.
-There are no content-element configuration fields, retention cron or PWA/Messenger
-handlers in this package. The separate PWA bridge is phase 5.
+There are no content-element configuration fields or retention cron. Optional
+PWA push integration is included in this bundle and disabled by default.
 
 ## Configuration
 
@@ -282,15 +282,16 @@ fallback. Manual/device checks are in [.docs/BROWSER_CHECKLIST.md](.docs/BROWSER
 
 `Service\ConversationUrlGenerator` is the single URL builder:
 
-- `forConversation(Conversation $conversation, int $memberId): ?string` checks
-  that conversation participant's `lastPageId` first.
+- `forConversation(Conversation $conversation, int $memberId, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH): ?string` checks
+  that conversation participant's `lastPageId` first. Pass `ABSOLUTE_URL` for
+  delivery outside a web page; push does this per recipient.
 - `listPage(int $memberId): ?string` uses the latest positive tracked page by
   `lastReadAt`, then participant ID, across the member's conversations.
 - Both fall back to the first published root with a usable `memberChatPage`,
   ordered by root sorting then ID, then return `null`. Deleted, unpublished,
   time-restricted and non-regular destinations are rejected, including an
   unpublished root. Preview mode never enables unpublished deep links.
-- `generate(PageModel $page, ?string $uuid = null)` preserves an already known
+- `generate(PageModel $page, ?string $uuid = null, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH)` preserves an already known
   content-element page without a query per list row. Explicit empty parameters
   clear an existing auto-item. URL generation does not grant access or verify
   that an editor placed a chat element on the selected page.
@@ -318,11 +319,86 @@ null after deletion. Stable read-only
 returns `null` for a removed participant, otherwise
 `{lastReadAt: int, lastReadMessageId: int, lastPageId: int, muted: bool}`. This
 existing narrow accessor avoids a second wrapper service or exposing SQL.
-A push listener uses event recipient IDs, skips missing/muted participants,
-and may suppress recent activity by `lastReadAt`. A queued handler must reload
-message and participant state before delivery; it may skip an already-read
-message using `lastReadMessageId`. No queue payload, handler, PWA dependency or
-push delivery implementation is included. That belongs in the separate bridge.
+The optional push handler below reloads messages and participant state before
+delivery. The event recipient list limits delivery; current participant rows
+determine whether a queued recipient is still eligible.
+
+## Optional PWA push
+
+The chat works unchanged without `heimrichhannot/contao-pwa-bundle`: no push
+services are registered unless its sender, notification and model classes are
+available. It is a Composer suggestion, not a production requirement. The
+bundle's development dependency tests the real PWA 0.10 notification API with a
+mock sender. No separate bridge package is needed.
+
+Install and enable the PWA bundle, install a compatible `minishlink/web-push`
+version (PWA only suggests it), configure PWA VAPID credentials, and enable push
+on a PWA configuration. Devices must grant permission and subscribe while
+logged in so subscriptions contain the receiving member's ID. Then configure:
+
+```yaml
+contao_member_chat:
+    push:
+        enabled: true
+        configuration: 3 # existing tl_pwa_configurations ID with supportPush enabled
+        active_recipient_grace: 60
+        body_length: 0
+```
+
+| Option under `push` | Default | Unit and meaning |
+| --- | --- | --- |
+| `enabled` | `false` | Boolean; enables enqueueing and handling when PWA is available. Disabling also suppresses already queued messages. |
+| `configuration` | `0` | Integer configuration ID; `0` means no delivery. Choose one positive ID with push enabled. Only that configuration's subscriptions are eligible. |
+| `active_recipient_grace` | `60` | Seconds; suppress recipients with positive `lastReadAt` at or after worker time minus this value. `0` disables activity suppression. |
+| `body_length` | `0` | UTF-8 characters, 0–500; `0` omits message text entirely, otherwise takes the first N characters without an appended ellipsis. |
+
+A fixed configuration ID keeps delivery within the intended PWA/site, including
+on installations with several configurations. There is no automatic broadcast
+across configurations. Missing/disabled configurations and empty subscriber
+lists result in no delivery.
+
+The post-commit event listener only enqueues message and recipient IDs. Contao
+Managed Edition routes `LowPriorityMessageInterface` to the Doctrine
+`contao_prio_low` transport; keep that asynchronous routing if overriding
+Messenger configuration. Contao's configured web/cron workers, or
+`bin/console messenger:consume contao_prio_low`, process the queue. The interface
+is deprecated in Contao 5.6 and will need migration to `AsMessage` for Contao 6;
+this bundle currently requires Contao 5.7.
+
+At execution time the handler reloads the message/conversation and each event
+recipient's participant state. Removed, muted, recently active recipients and
+the author are skipped. Other participants not in the event are never added.
+No additional permanent already-read suppression is applied: a delayed message
+can notify after the activity grace expires. Failures are logged and swallowed,
+so they neither roll back chat messages nor trigger automatic push retries;
+remaining recipients are still attempted. Delivery is best effort, not exactly
+once, and a manually redelivered queue message can notify again.
+
+Activity writes are throttled by `polling.activity_throttle` (default 30 seconds).
+`lastReadAt` can therefore lag actual activity by up to that interval, plus
+poll/network delays. A grace shorter than the throttle may notify someone who
+is actively reading. The 60-second default provides room for the default
+throttle and normal 4-second polling, but cannot guarantee suppression during
+browser suspension or network delays.
+
+The title is the sender's display name from `ContactResolver`. **Push payloads
+leave the chat server and reach device notification systems**, potentially
+including a lock screen. With a positive `body_length`, they also contain private
+message text. The default omits text, but still includes the sender name and,
+when resolvable, the conversation URL. Review this before opting into excerpts.
+The chat's own error context contains IDs and an exception, not a copied body;
+the PWA sender also writes its delivery diagnostics to the application logger.
+
+The click target uses the recipient's current `lastPageId` or the existing
+published-root fallback, rendered as an absolute URL in `data.clickJumpTo`.
+Configure root domains and a correct router `default_uri` for CLI workers where
+needed. No resolvable destination means a notification without a deep link.
+Opening a URL still requires the normal frontend login/access checks.
+
+Real push delivery is not covered by automated tests. Acceptance requires a
+running worker, valid VAPID keys, a subscribed device and its service worker,
+and confirmation of notification display, clicking/login/deep-link routing,
+muting and activity suppression on the target platforms.
 
 ## Moderation and privacy
 

@@ -12,5 +12,7 @@ First release preparation:
   with last-message repair.
 - Member-deletion anonymization and stable integration events/read APIs.
 - Unit, database and DDEV HTTP verification; documented manual device checks.
-
-PWA push integration is a separate, future bridge package.
+- Optional PWA push integration inside this bundle: queued delivery, current
+  recipient filtering, per-recipient absolute deep links, fixed configuration
+  selection and message excerpts disabled by default. No PWA requirement for
+  normal chat installations.

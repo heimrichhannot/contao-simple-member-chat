@@ -839,40 +839,39 @@ den Versand nicht rückgängig machen; er wird geloggt.
 `recipientIds` ist bei 1:1 genau eine ID. Die Liste bleibt trotzdem eine
 Liste, damit Listener nicht auf 1:1 festgenagelt sind.
 
-### 8.2 PWA-Push
+### 8.2 Optional PWA push (revised in Phase 5)
 
-Die Kopplung an `contao-pwa-bundle` ist **nicht** Teil dieses Bundles. Der
-Chat kennt das PWA-Bundle nicht; das PWA-Bundle (oder ein Projekt-Listener)
-kennt den Chat. Geprüfte Voraussetzungen im PWA-Bundle:
+The integration lives in this bundle under `src/Integration/Pwa/`, as decided
+in section 13, decision 3. PWA is suggested for production and required only
+for development tests of its real classes. No bridge package is created.
 
-* `tl_pwa_pushsubscriber` trägt ein Feld `member`, das beim Abonnieren aus
-  dem eingeloggten `FrontendUser` gesetzt wird. Zielgerichteter Versand an
-  ein Mitglied ist also möglich.
-* `PushNotificationSender::send(AbstractNotification, PwaConfigurationsModel, ?array $subscribers)`
-  akzeptiert eine explizite Empfängerliste.
-* `DefaultNotification` trägt Titel, Body, Icon; ein Ziel-URL-Feld für den
-  Klick ist zu prüfen (Notification-Click landet derzeit über
-  `notificationClickEvent` am Model).
+- Conditional service registration requires the PWA sender, notification and
+  subscriber/configuration classes. Without them, no integration code loads.
+- An attributed `MessageSentEvent` listener enqueues only message/recipient IDs.
+  `SendChatPushMessage` implements Contao's `LowPriorityMessageInterface`,
+  routed to `contao_prio_low` by the Managed Edition. This interface is deprecated
+  in 5.7; Contao 6 will require migration to the message routing attribute.
+- The handler reloads the message/conversation and participant rows. Missing,
+  muted and recently active recipients are skipped. The event recipient list
+  never expands. Subscriber queries filter both member and configuration ID.
+- Configuration defaults: `push.enabled: false`, `configuration: 0` (no target),
+  `active_recipient_grace: 60` seconds, `body_length: 0` UTF-8 characters.
+  A positive configuration ID selects one push-enabled PWA configuration.
+  Excerpts may contain 0–500 characters. Activity throttling can make
+  `lastReadAt` lag actual activity; see README for the suppression limits.
+- The notification title is the sender's display name. The PWA notification
+  getter protocol supports `data.clickJumpTo`; no backend notification model
+  is needed. Per-recipient absolute URLs use the existing URL generator and
+  publication/fallback rules. Missing destinations do not prevent sending.
+- An empty subscriber array MUST NOT reach the PWA sender: it interprets this
+  as broadcast. Sender errors are logged and delivery continues for later
+  recipients. PWA `sendWithLog()` returning true does not prove device delivery.
+- PWA only suggests `minishlink/web-push`; deployments need it, VAPID credentials,
+  member-bound subscriptions and a working service worker/queue consumer.
 
-Aufbau des Listeners im Brücken-Paket (Abschnitt 13, Entscheidung 3):
-
-1. `#[AsEventListener]` auf `MessageSentEvent`.
-2. Listener legt nur eine Messenger-Message `SendChatPushMessage(messageId, recipientIds)`
-   auf den Bus. Sie implementiert `LowPriorityMessageInterface` aus dem
-   Contao-Core, damit die Managed Edition sie auf den Low-Priority-Transport
-   routet. Der Web-Request wartet so nicht auf den Push-Versand. Contao
-   arbeitet die Queue per Cron-Worker oder Web-Worker (`kernel.terminate`) ab.
-3. Der Handler lädt Nachricht und Subscriber nach `member IN (recipientIds)`,
-   baut eine `DefaultNotification` (Titel „Neue Nachricht von …", Body
-   gekürzt) und ruft den Sender.
-4. Kein Push an Empfänger, die die Konversation stummgeschaltet haben
-   (`tl_chat_participant.muted`).
-5. Optional: kein Push, wenn der Empfänger die Konversation in den letzten
-   n Sekunden gepollt hat (er ist gerade aktiv). Dafür genügt ein Blick auf
-   `tl_chat_participant.lastReadAt`.
-
-Das Chat-Bundle liefert dafür lediglich eine `MessageGateway::find(int)`-
-Methode und die Event-Klassen als stabile öffentliche API.
+The original external-bridge wording and uncertainty about click targets are
+superseded by this verified implementation. See `.docs/build/DECISIONS.md` and
+`.docs/build/reports/phase-5-push.md` for source evidence and acceptance limits.
 
 ---
 
@@ -1117,9 +1116,9 @@ Geprüft im `contao-pwa-bundle` (Arbeitsstand im Repository):
 | Versand mit Empfängerliste | `src/Sender/PushNotificationSender.php::send(AbstractNotification, PwaConfigurationsModel, ?array $subscribers)` |
 | Notification-DTO | `src/Notification/DefaultNotification.php` (title, body, icon) |
 
-**Nicht verifiziert:** Die Transport-Namen `contao_prio_low/normal/high`
-und deren Routing stammen aus `contao/manager-bundle`, das im geprüften
-Vendor-Verzeichnis nicht vorlag. Vor der Umsetzung im Ziel-Projekt prüfen.
+**Verified in Phase 5:** The host `contao/manager-bundle` skeleton defines
+`contao_prio_low/normal/high` and routes the matching message interfaces to
+Doctrine transports. See the Phase 5 source evidence in `DECISIONS.md`.
 
 ---
 
@@ -1296,6 +1295,17 @@ Screenshots.
 
 ---
 
+### Phase 5 findings
+
+Optional PWA integration is implemented and covered by unit, compiled-container
+and real-database recipient tests. The full required automated checks pass;
+actual device delivery is not verified. `ConversationUrlGenerator` now accepts
+an optional reference type in `forConversation()` and `generate()`, preserving
+the original absolute-path defaults. Push explicitly requests an absolute URL.
+The original external bridge and unverified click-target assumptions are
+corrected in section 8.2. See `.docs/build/reports/phase-5-push.md` for commands,
+outputs, decisions and end-to-end acceptance prerequisites.
+
 ## 16. Stand der Umsetzung
 
 | Phase | Inhalt | Stand |
@@ -1307,7 +1317,7 @@ Screenshots.
 | 3c Fixes | fünf Befunde aus dem Browser-Review | abgeschlossen |
 | 4 Rand | Backend, Badge, URL-Auflösung, stabile API, README | abgeschlossen |
 | 4b Polling-Robustheit | zwei Lebenszyklus-Fehler im Skript | abgeschlossen |
-| 5 Push | optionale PWA-Integration im Bundle, lose Abhängigkeit | offen |
+| 5 Push | Optional PWA integration inside the bundle, loose dependency | implemented; real device delivery not verified |
 
 Offen außerhalb der Phasen:
 

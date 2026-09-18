@@ -339,3 +339,47 @@ restart signals, native pagehide, late completion, hidden/invisible/busy frames,
 backoff cap and reset. Browser bfcache/device acceptance is **not verified**;
 see the exact reproductions in `../BROWSER_CHECKLIST.md` and captured commands
 in `reports/phase-4b-polling-resilience.md`.
+
+## Phase 5 — Optional PWA push
+
+Verified 2026-09-18 against this repository's installed Contao 5.7.13/Symfony 7.4
+sources and the read-only sibling `/home/dev/Kunden/github/contao-pwa-bundle`.
+PWA 0.10.1 was installed only as a development dependency; its sender source
+matches the inspected sibling. Host application and sibling source are unchanged.
+
+| Decision | Verified source evidence |
+| --- | --- |
+| Optional services in their own namespace and YAML import | `src/HeimrichHannotSimpleMemberChatBundle.php::loadExtension()`, `config/services.yaml`, `config/pwa.yaml`; `vendor/symfony/http-kernel/Bundle/AbstractBundle.php` supports conditional imports. Always-loaded code uses optional class names only in availability checks; resource discovery excludes all of `Integration`. |
+| PWA availability guard | PWA `src/Sender/PushNotificationSender.php`, `src/Notification/{AbstractNotification,DefaultNotification}.php`, `src/Model/{PwaConfigurationsModel,PwaPushSubscriberModel}.php`; require sender, default notification and both models before importing services. Missing PWA ignores push settings and creates no integration services. |
+| One fixed configuration, default 0 (no target) | PWA `contao/dca/tl_pwa_configurations.php` exposes `supportPush`; subscriber model's `pid` points to that configuration and `member` to the recipient. `Contao/Model.php::{findByPk,findBy}` accepts parameterized columns/values; `src/Framework/Adapter.php::__call()` delegates these static APIs after framework initialization. Both query and final in-memory checks constrain member and configuration. |
+| Low-priority asynchronous delivery | `vendor/contao/core-bundle/src/Messenger/Message/LowPriorityMessageInterface.php`; host `vendor/contao/manager-bundle/skeleton/config/config.yaml` lines 45–90 routes it to Doctrine `contao_prio_low` and configures web/cron workers. The required interface is deprecated since 5.6; the recommended successor is `#[AsMessage('contao_prio_low')]`. Keep the explicitly requested interface for this Contao 5.7 phase. |
+| Attribute registration and bus behavior | `vendor/symfony/event-dispatcher/Attribute/AsEventListener.php`, `vendor/symfony/messenger/Attribute/AsMessageHandler.php`, `MessageBusInterface.php`, `Transport/Sender/SendersLocator.php`, `Middleware/SendMessageMiddleware.php`. Interface routing selects the transport and stops before handler middleware. The listener dispatches IDs only; phase 1 service-level post-commit exception logging also covers bus failures. |
+| Fresh recipient state, not historical event state | Existing `MessageGatewayInterface::find`, `ConversationGatewayInterface::find`, `ParticipantGatewayInterface::state`; recipient list remains bounded by the queued event. Missing/muted/author recipients are skipped. Positive `lastReadAt >= time() - grace` suppresses activity when grace > 0; default 60 seconds, zero disables. No permanent already-read suppression is added. |
+| Activity throttle consequence | `src/Gateway/ParticipantGateway.php::markRead()` can defer unchanged read activity by `ChatOptions::activityThrottle` (default 30 seconds). Grace does not compensate automatically; choosing a grace below the throttle can notify active readers. Browser/poll/network delays remain outside that guarantee. |
+| Display and UTF-8 excerpt | Existing `ContactResolver::resolve()` supplies the sender display name as the title; body defaults to absent and is bounded to 0–500 UTF-8 characters, without an ellipsis. The excerpt and sender name leave the server for the push service/device; README documents lock-screen exposure. |
+| Absolute recipient-specific URLs without changing default output | `vendor/contao/core-bundle/src/Routing/ContentUrlGenerator.php::generate()` defaults to `ABSOLUTE_PATH`, so phase 4's default alone was insufficient for push. Add an optional reference type to `ConversationUrlGenerator::{forConversation,generate}`, keeping both defaults unchanged; the handler requests `UrlGeneratorInterface::ABSOLUTE_URL`. No separate URL-building path, cursor or view contract is introduced. CLI deployments need valid root domains/router context. |
+| Click payload without a backend notification record | PWA `AbstractNotification::toArray()` discovers public no-argument getters except `getModel`; `DefaultNotification` allows no model. `ChatNotification::getData()` adds `data.clickJumpTo`; PWA `src/DataContainer/PwaPushNotificationContainer.php` and `contao/templates/pwa/serviceworker.js.twig` confirm that shape and `clients.openWindow`. Null body/data are omitted. The getter is the necessary PWA serialization extension point. |
+| Guard against PWA broadcast fallback | `PushNotificationSender::sendWithLog()` treats a falsey subscriber argument, including `[]`, as all configuration subscribers. Never invoke it for an empty filtered target list. It accepts model instances and uses configured global VAPID credentials, not per-configuration credentials. |
+| Failure handling and delivery limits | PWA `sendWithLog()` uses the passed PSR logger, can return false for prerequisites and can throw. It can also return true despite failed individual device deliveries; it logs their outcomes. Catch per recipient and around setup, continue later recipients, and never rethrow into Messenger. This means no automatic retry for handled failures; duplicate queue delivery remains possible and is documented. |
+| Real PWA tests without production coupling | `composer.json` has PWA under `suggest` and `require-dev` only. Tests use the actual models, notification serialization and mocked sender; there are no replacement PWA class stubs. Container tests suppress optional autoloading in a separate PHP process and reject any integration autoload when absent; the present case compiles the optional graph with host services synthetic. |
+
+### Concept corrections and unavailable PWA features
+
+- Section 8.2 still described the superseded external bridge; it now agrees
+  with revised decision 3 and describes this optional in-bundle integration.
+- The click target is supported through an additional getter, without a stored
+  backend notification. `DefaultNotification` itself has no URL setter.
+- `minishlink/web-push` is only suggested by PWA and is not installed by this
+  phase. PWA's package supports PHP 8.2/Contao 5.3; this chat still requires
+  PHP 8.4/Contao 5.7. No changes were made to the PWA bundle.
+- PWA offers no chat mute/activity policy, no queue deduplication guarantee and
+  no positive device-delivery guarantee from a boolean sender return value.
+  Its expired-subscription removal remains TODO in the inspected sender.
+- Container graph tests and mocked sends prove wiring/filtering/serialization,
+  not actual browser/device delivery. Real end-to-end push is not verified.
+
+The DDEV host was also booted with no PWA classes installed, and its compiled
+container has none of the three push services, including removed private IDs.
+A separate `composer install --no-dev` in DDEV's `/tmp` excluded PWA and loaded
+the extension successfully even with push enabled. These supplement, rather
+than replace, the isolated compiled-container unit tests.
