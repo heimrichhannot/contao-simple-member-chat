@@ -383,3 +383,28 @@ container has none of the three push services, including removed private IDs.
 A separate `composer install --no-dev` in DDEV's `/tmp` excluded PWA and loaded
 the extension successfully even with push enabled. These supplement, rather
 than replace, the isolated compiled-container unit tests.
+
+## Phase 6
+
+Scope: the conversation-label crash and the raw child-list header timestamp only.
+Verified against installed Contao 5.7.13; no frontend or host source changes.
+
+| Decision | Verified vendor evidence |
+| --- | --- |
+| Keep the existing translation domain and use three positional `%s` values | `vendor/contao/core-bundle/src/Translation/Translator.php::trans()` retrieves the catalogue text and applies `vsprintf()` for nonempty parameters in every `contao_*` domain. Both summary translations now follow the adjacent delete label convention. Escaping still happens after substitution. |
+| Run the actual Contao translation method in the unit regression | The same `Translator.php` permits isolating `getCatalogue()` while executing unchanged `trans()`. `vendor/symfony/translation/MessageCatalogue.php` accepts domain-keyed messages; tests load the real English/German PHP files. Catalogue loading alone is doubled, not formatting. Restoring the old English string reproduces the original ValueError. Host verification additionally exercises the fully booted translator and language loading. |
+| Set `eval.rgxp = datim` on the parent's `lastMessageAt` field | `vendor/contao/core-bundle/contao/dca/tl_article.php`, fields `start`/`stop`, uses this metadata for timestamp columns. `vendor/contao/core-bundle/contao/drivers/DC_Table.php::parentView()` (header-fields loop) formats the **parent** table field via `contao.data_container.value_formatter`. `vendor/contao/core-bundle/src/DataContainer/ValueFormatter.php::{format,getLabel}` selects `Date::parse(Config::get('datimFormat'), value)` for `datim` and returns an empty string for zero. No custom callback, sorting flag or schema change is needed. |
+| Extend the read-only host smoke at the core rendering boundaries | `vendor/contao/core-bundle/contao/classes/DataContainer.php::generateRecordLabel()` resolves registered array callbacks with `System::importStatic()`. `DC_Table::parentView()` creates an unconstructed DC context for the formatter; `DataContainer::__set()` supports `id`/`field`, while the tool sets protected `strTable` through reflection to avoid deprecated dynamic access. The host tool renders registered labels and parent header values in both languages, including zero handling. `contao/templates/twig/backend/data_container/table/view/parent.html.twig` in the core consumes these values as `table_headers`; full template/UI rendering is not claimed. |
+
+Other explicit `contao_*` calls were audited across `src/`: only
+`ContactResolver::resolveMany()` remains, using `contao_default` and an empty
+parameter array for `MSC.member_chat.deleted_member`; it requires no change.
+The DaySeparatorFactory calls and frontend Twig translations use the normal
+messages domain, so their named parameters are unaffected. Existing conversation
+and message delete descriptions already use `%s` correctly.
+
+Authenticated backend UI, permissions and deletion/Undo reacceptance are **not
+verified** in this phase. The browser checklist contains exact follow-up steps.
+The host smoke tests rendering services with deterministic rows, not an
+authenticated DC_Table request. Exact checks and outputs are in
+`reports/phase-6-backend-fixes.md`.
