@@ -1331,3 +1331,36 @@ Offen außerhalb der Phasen:
 * `.docs/BROWSER_CHECKLIST.md` listet, was nur auf echten Geräten prüfbar
   bleibt: iOS- und Android-Tastatur, Standalone-PWA, Screenreader.
 
+### Erkenntnisse aus dem Backend-Test
+
+Geprüft am 2026-09-18 in der echten Contao-Backend-Oberfläche, angemeldet
+als Backend-Benutzer. Der Host-Smoke-Test aus Phase 4 belegte nur die
+Registrierung, nicht das Rendern.
+
+**Blocker: die Konversationsliste stürzt mit HTTP 500 ab.**
+`/contao?do=member_chat` wirft `ValueError: Unknown format specifier`.
+Der Stack führt von `ListLabelLabelListener` der Konversationen in
+`Translator::trans()`. Contaos Übersetzer wendet auf jede Domain, die mit
+`contao_` beginnt, `vsprintf($translated, $parameters)` an (belegt in
+`vendor/contao/core-bundle/src/Translation/Translator.php`, Zeilen 46 bis
+58). Der Schlüssel `tl_chat_conversation.summary` benutzt aber benannte
+Platzhalter: `%first% ↔ %second%, letzte Nachricht: %time%`. `vsprintf`
+liest `%f` als Fließkomma-Formatierung und scheitert am Zeichen nach dem
+nächsten Prozentzeichen. **Benannte Platzhalter funktionieren in
+`contao_*`-Domains grundsätzlich nicht**; der Nachbarschlüssel
+`tl_chat_conversation.delete.1` verwendet korrekt `%s`.
+
+Wichtig für den Fix: Der vorhandene Unit-Test benutzt einen
+Übersetzer-Stub und konnte den Absturz deshalb nicht sehen. Ein Test muss
+durch den echten Contao-Übersetzer laufen.
+
+**Kleiner Befund:** Die Kopfzeile der Kindliste zeigt den rohen
+Unix-Zeitstempel statt eines formatierten Datums.
+
+**Bestätigt funktionierend:** Die Nachrichtenliste zeigt Autor, Zeit und
+Auszug; eingebettete Script-Tags erscheinen escapet als Text. Das Löschen
+über den echten Backend-Link hat die Reparatur ausgelöst: `lastMessageId`
+sprang von 127 auf 126, `lastMessageAt` wurde angepasst, die
+Nachrichtenzahl ging von 22 auf 21. Das Modul steht in der Navigation
+unter den Mitgliederfunktionen.
+

@@ -15,3 +15,4 @@ vorliegt.
 | 4 Rand | Backend-Modul, Twig-Badge, `ConversationUrlGenerator`, Messenger-Vorbereitung, README, Browser-Checkliste. | 5.5, 7, 9, 12b |
 | 4b Polling-Robustheit | Zwei Befunde aus dem Browser-Review von Phase 4: `turbo:before-cache` stoppt das Polling dauerhaft, `visibilitychange` startet jedes Intervall neu. | 15 (Erkenntnisse aus Phase 4), 5.2 |
 | 5 Push | Optionale PWA-Push-Integration im Bundle selbst, lose Abhängigkeit: Listener, Messenger-Message und Handler, nur aktiv wenn das PWA-Bundle installiert ist. | 8.2, Entscheidung 3 (revidiert) |
+| 6 Backend-Fixes | Absturz der Konversationsliste durch benannte Platzhalter in einer `contao_*`-Domain, roher Zeitstempel in der Kopfzeile. | 9, 15 (Backend-Test) |
