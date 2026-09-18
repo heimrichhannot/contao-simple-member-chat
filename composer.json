@@ -13,15 +13,16 @@
         "symfony/uid": "^7.4"
     },
     "require-dev": {
+        "contao/contao-rector": "dev-main",
         "contao/test-case": "^5.0",
-        "phpunit/phpunit": "^12.0",
-        "symplify/easy-coding-standard": "^12.0",
+        "heimrichhannot/contao-pwa-bundle": "^0.10.1",
         "phpstan/phpstan": "^2.1",
-        "phpstan/phpstan-symfony": "^2.0",
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-strict-rules": "^2.0",
+        "phpstan/phpstan-symfony": "^2.0",
+        "phpunit/phpunit": "^12.0",
         "rector/rector": "^2.0",
-        "contao/contao-rector": "dev-main"
+        "symplify/easy-coding-standard": "^12.0"
     },
     "autoload": {
         "psr-4": {
@@ -45,6 +46,7 @@
         "sort-packages": true
     },
     "suggest": {
+        "heimrichhannot/contao-pwa-bundle": "Enables optional push notifications for new chat messages.",
         "heimrichhannot/contao-ux-turbo-encore": "Turbo is provided by the project: activate huh_ux_turbo_encore or huh_ux_turbo_encore_no_drive on the chat page."
     }
 }

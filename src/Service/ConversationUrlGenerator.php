@@ -12,6 +12,7 @@ use Contao\PageModel;
 use HeimrichHannot\SimpleMemberChatBundle\Domain\Conversation;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ParticipantGatewayInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final readonly class ConversationUrlGenerator
 {
@@ -25,11 +26,11 @@ final readonly class ConversationUrlGenerator
     /**
      * Stable integration API. Returns null when no published destination exists.
      */
-    public function forConversation(Conversation $conversation, int $memberId): ?string
+    public function forConversation(Conversation $conversation, int $memberId, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH): ?string
     {
         $page = $this->resolvePage($this->participants->state($conversation->id, $memberId)['lastPageId'] ?? 0);
 
-        return $page instanceof PageModel ? $this->generate($page, $conversation->uuid) : null;
+        return $page instanceof PageModel ? $this->generate($page, $conversation->uuid, $referenceType) : null;
     }
 
     /**
@@ -98,11 +99,11 @@ final readonly class ConversationUrlGenerator
         return $page;
     }
 
-    public function generate(PageModel $page, ?string $uuid = null): string
+    public function generate(PageModel $page, ?string $uuid = null, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH): string
     {
         // An explicit empty parameter also clears a current conversation item.
         return $this->urls->generate($page, [
             'parameters' => $uuid === null ? '' : '/' . $uuid,
-        ]);
+        ], $referenceType);
     }
 }

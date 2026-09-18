@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace HeimrichHannot\SimpleMemberChatBundle;
 
+use HeimrichHannot\PwaBundle\Model\PwaConfigurationsModel;
+use HeimrichHannot\PwaBundle\Model\PwaPushSubscriberModel;
+use HeimrichHannot\PwaBundle\Notification\DefaultNotification;
+use HeimrichHannot\PwaBundle\Sender\PushNotificationSender;
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
 use HeimrichHannot\SimpleMemberChatBundle\Contact\Provider\MemberGroupsContactProvider;
 use HeimrichHannot\SimpleMemberChatBundle\Contact\Provider\SharedGroupsContactProvider;
@@ -39,6 +43,12 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
                 ->integerNode('conversations_interval')->min(1)->defaultValue(15000)->end()
                 ->integerNode('badge_interval')->min(1)->defaultValue(30000)->end()
                 ->integerNode('max_interval_multiplier')->min(1)->defaultValue(8)->end()
+            ->end()->end()
+            ->arrayNode('push')->addDefaultsIfNotSet()->children()
+                ->booleanNode('enabled')->defaultFalse()->end()
+                ->integerNode('configuration')->min(0)->defaultValue(0)->end()
+                ->integerNode('active_recipient_grace')->min(0)->defaultValue(60)->end()
+                ->integerNode('body_length')->min(0)->max(500)->defaultValue(0)->end()
             ->end()->end()
             ->arrayNode('message')->addDefaultsIfNotSet()->children()
                 ->integerNode('max_length')->min(1)->defaultValue(2000)->end()
@@ -80,13 +90,26 @@ class HeimrichHannotSimpleMemberChatBundle extends AbstractBundle
          *     message: array{max_length: int, rate_limit: int, rate_limiter: ?string},
          *     list: array{page_size: int, search_limit: int, search_min_length: int},
          *     contact: array{avatar_field: ?string, avatar_size: int|array{int, int, string}},
+         *     push: array{enabled: bool, configuration: int, active_recipient_grace: int, body_length: int},
          *     providers: array<string, mixed>
          * } $options
          */
         $options = $config;
         $configurator->import('../config/services.yaml');
+        // Strings here keep optional PWA types out of the always-loaded service graph.
+        if (class_exists(PushNotificationSender::class)
+            && class_exists(DefaultNotification::class)
+            && class_exists(PwaConfigurationsModel::class)
+            && class_exists(PwaPushSubscriberModel::class)) {
+            $configurator->import('../config/pwa.yaml');
+        }
+
         foreach ($options as $name => $value) {
             $container->setParameter('contao_member_chat.' . $name, $value);
+        }
+
+        foreach ($options['push'] as $name => $value) {
+            $container->setParameter('contao_member_chat.push.' . $name, $value);
         }
 
         $container->setDefinition(ChatOptions::class, new Definition(ChatOptions::class, [

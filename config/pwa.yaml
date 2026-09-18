@@ -1,0 +1,13 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\MessageSentListener: ~
+    HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\SendChatPushHandler: ~
+    HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\PushOptions:
+        arguments:
+            $enabled: '%contao_member_chat.push.enabled%'
+            $configuration: '%contao_member_chat.push.configuration%'
+            $activeRecipientGrace: '%contao_member_chat.push.active_recipient_grace%'
+            $bodyLength: '%contao_member_chat.push.body_length%'
