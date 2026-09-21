@@ -448,6 +448,14 @@ the queue. The deprecated `LowPriorityMessageInterface` is deliberately not
 used: it stops working in Contao 6, and the core's own messages already use the
 attribute.
 
+**Set the domain of your root page.** Contao builds the absolute deep link from
+it. Without a domain, absolute URLs fall back to the router request context,
+which has no request inside a Messenger worker and then resolves to `localhost`.
+The bundle therefore carries the scheme and host of the sending request in the
+queued message and anchors the link to it when the root page has no domain. If
+neither is available, the push is sent **without** a deep link rather than with
+an unusable one.
+
 At execution time the handler reloads the message/conversation and each event
 recipient's participant state. Removed, muted, recently active recipients and
 the author are skipped. Other participants not in the event are never added.

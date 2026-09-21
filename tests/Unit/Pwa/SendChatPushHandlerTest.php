@@ -160,4 +160,43 @@ final class SendChatPushHandlerTest extends ContaoTestCase
         $logger->expects(self::once())->method('error')->with('Chat push failed.', self::callback(static fn (array $context): bool => $context['messageId'] === 42));
         $this->pushHandler(self::createStub(ParticipantGatewayInterface::class), self::createStub(PushNotificationSender::class), logger: $logger, messages: $messages)(new SendChatPushMessage(42, [9]));
     }
+
+    public function testWithoutARootDomainAndWithoutARequestHostNoDeepLinkIsSent(): void
+    {
+        $participants = self::createStub(ParticipantGatewayInterface::class);
+        $participants->method('state')->willReturn([
+            'lastReadAt' => 0,
+            'lastReadMessageId' => 0,
+            'lastPageId' => 109,
+            'muted' => false,
+        ]);
+        $sender = $this->createMock(PushNotificationSender::class);
+        $sender->expects(self::once())->method('sendWithLog')->willReturnCallback(static function (ChatNotification $notification): bool {
+            // A queue without a request would otherwise produce a localhost link.
+            self::assertArrayNotHasKey('data', $notification->toArray());
+
+            return true;
+        });
+        $this->pushHandler($participants, $sender, domain: '')(new SendChatPushMessage(42, [9]));
+    }
+
+    public function testTheRequestHostAnchorsTheDeepLinkWhenTheRootPageHasNoDomain(): void
+    {
+        $participants = self::createStub(ParticipantGatewayInterface::class);
+        $participants->method('state')->willReturn([
+            'lastReadAt' => 0,
+            'lastReadMessageId' => 0,
+            'lastPageId' => 109,
+            'muted' => false,
+        ]);
+        $sender = $this->createMock(PushNotificationSender::class);
+        $sender->expects(self::once())->method('sendWithLog')->willReturnCallback(static function (ChatNotification $notification): bool {
+            $payload = $notification->toArray();
+            self::assertIsArray($payload['data']);
+            self::assertSame('https://chat.example.com/page109/uuid', $payload['data']['clickJumpTo']);
+
+            return true;
+        });
+        $this->pushHandler($participants, $sender, domain: '')(new SendChatPushMessage(42, [9], 'https://chat.example.com'));
+    }
 }

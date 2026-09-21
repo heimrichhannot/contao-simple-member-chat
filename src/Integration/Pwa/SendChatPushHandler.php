@@ -85,7 +85,7 @@ final readonly class SendChatPushHandler
                         continue;
                     }
 
-                    $url = $this->urls->forConversation($conversation, $recipientId, UrlGeneratorInterface::ABSOLUTE_URL);
+                    $url = $this->urls->forConversation($conversation, $recipientId, UrlGeneratorInterface::ABSOLUTE_URL, $queued->baseUrl);
                     if (!$this->sender->sendWithLog(new ChatNotification($title, $body, $url), $config, $this->logger, $targets)) {
                         $this->logger->warning('Chat push sender could not send notification.', [
                             'messageId' => $queued->messageId,

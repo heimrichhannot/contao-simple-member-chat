@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 final class PwaContainerTest extends TestCase
@@ -100,7 +101,7 @@ final class PwaContainerTest extends TestCase
             }
         }
 
-        foreach ([ContaoFramework::class, MessageBusInterface::class, LoggerInterface::class, ...($pwa ? [PushNotificationSender::class] : [])] as $class) {
+        foreach ([ContaoFramework::class, MessageBusInterface::class, LoggerInterface::class, RequestStack::class, ...($pwa ? [PushNotificationSender::class] : [])] as $class) {
             $container->register($class, $class)->setSynthetic(true)->setPublic(true);
         }
 

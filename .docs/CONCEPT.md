@@ -1531,3 +1531,38 @@ Button hat seinen Handler und das PWA-Bundle verweist auf ein lebendes Element.
 ändern. Die ursprüngliche Entscheidung 10 wog die App-Anmutung höher als die
 Verträglichkeit mit fremdem Code; das war falsch herum.
 
+### Befund: Push-Links zeigten auf localhost
+
+Gemeldet am 2026-09-21. Die Benachrichtigungen enthielten als Ziel
+`https://localhost/...`.
+
+**Ursache.** Der Deep-Link wird im Messenger-Handler erzeugt. Contao nimmt
+für absolute URLs die Domain der Root-Seite; ist dort keine gesetzt, fällt
+er auf den Router-Request-Kontext zurück. In einem Worker gibt es keinen
+Request, und dessen Vorgabe ist `localhost`. Nachgewiesen im Demo ohne
+Request:
+
+```
+request context host='localhost' scheme=http
+page 88 rootdns=''
+absolute url=https://localhost/chat/01a0ae9d-….html
+```
+
+Beim Web-Worker fiel das nicht auf, weil dort zufällig noch der Request des
+Absenders im Kontext stand. Mit einem Cron-Worker, den das README selbst
+nennt, wäre jeder Link unbrauchbar gewesen.
+
+**Behebung.** Der Listener nimmt Schema und Host des sendenden Requests in
+die Messenger-Nachricht auf. Der Handler reicht sie an
+`ConversationUrlGenerator::forConversation()` weiter, das den Router-Kontext
+nur dann vorübergehend setzt, wenn die Root-Seite keine Domain hat; danach
+stellt es den vorherigen Kontext wieder her. Hat die Root-Seite eine Domain,
+gewinnt sie weiterhin, womit Mehrdomain-Installationen korrekt bleiben.
+Fehlen beide Angaben, wird der Push **ohne** Deep-Link verschickt statt mit
+einem falschen.
+
+**Lehre.** Absolute URLs in verzögerter Arbeit dürfen sich nicht auf den
+Request-Kontext verlassen. Was im Web-Worker funktioniert, kann im
+Cron-Worker still etwas anderes erzeugen. Im README steht jetzt außerdem,
+dass die Domain der Root-Seite gesetzt sein sollte.
+

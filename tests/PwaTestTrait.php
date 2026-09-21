@@ -27,6 +27,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Routing\RequestContext;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 trait PwaTestTrait
@@ -44,6 +45,7 @@ trait PwaTestTrait
         bool $link = true,
         ?array $subscribers = null,
         string $supportPush = '1',
+        string $domain = 'example.org',
     ): SendChatPushHandler {
         if (!$messages instanceof MessageGatewayInterface) {
             $messages = self::createStub(MessageGatewayInterface::class);
@@ -76,7 +78,7 @@ trait PwaTestTrait
             return $targets === [] ? null : new Collection($targets, 'tl_pwa_pushsubscriber');
         });
         $pages = $this->createAdapterStub(['findPublishedById', 'findPublishedRootPages']);
-        $pages->method('__call')->willReturnCallback(function (string $method, array $args) use ($link): ?PageModel {
+        $pages->method('__call')->willReturnCallback(function (string $method, array $args) use ($link, $domain): ?PageModel {
             if (!$link || $method !== 'findPublishedById') {
                 return null;
             }
@@ -86,6 +88,7 @@ trait PwaTestTrait
                 'type' => 'regular',
                 'isPublic' => true,
                 'rootIsPublic' => true,
+                'domain' => $domain,
             ]);
         });
         $framework = $this->createContaoFrameworkStub([
@@ -93,12 +96,20 @@ trait PwaTestTrait
             PwaPushSubscriberModel::class => $subscriptions,
             PageModel::class => $pages,
         ]);
+        // A real context so the generator's host anchoring is actually exercised.
+        $context = new RequestContext();
+        $context->setScheme('http');
+        $context->setHost('localhost');
+
         $urls = self::createStub(ContentUrlGenerator::class);
-        $urls->method('generate')->willReturnCallback(static function (PageModel $page, array $parameters, int $referenceType): string {
+        $urls->method('getContext')->willReturn($context);
+        $urls->method('generate')->willReturnCallback(static function (PageModel $page, array $parameters, int $referenceType) use ($context, $domain): string {
             self::assertSame(UrlGeneratorInterface::ABSOLUTE_URL, $referenceType);
             self::assertIsString($parameters['parameters']);
+            // Contao prefers the root page domain and falls back to the router context.
+            $host = $domain !== '' ? 'https://' . $domain : $context->getScheme() . '://' . $context->getHost();
 
-            return 'https://example.org/page' . $page->id . $parameters['parameters'];
+            return $host . '/page' . $page->id . $parameters['parameters'];
         });
         $members = self::createStub(ContactGatewayInterface::class);
         $members->method('findMembers')->willReturn([[

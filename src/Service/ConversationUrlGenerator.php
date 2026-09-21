@@ -25,12 +25,43 @@ final readonly class ConversationUrlGenerator
 
     /**
      * Stable integration API. Returns null when no published destination exists.
+     *
+     * $baseUrl anchors an absolute URL when the root page carries no domain. Queued
+     * work has no request, and the router context then defaults to "localhost",
+     * which would produce a link that is useless on the recipient's device.
      */
-    public function forConversation(Conversation $conversation, int $memberId, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH): ?string
+    public function forConversation(Conversation $conversation, int $memberId, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH, ?string $baseUrl = null): ?string
     {
         $page = $this->resolvePage($this->participants->state($conversation->id, $memberId)['lastPageId'] ?? 0);
+        if (!$page instanceof PageModel) {
+            return null;
+        }
 
-        return $page instanceof PageModel ? $this->generate($page, $conversation->uuid, $referenceType) : null;
+        if ($referenceType !== UrlGeneratorInterface::ABSOLUTE_URL || (string) $page->domain !== '') {
+            return $this->generate($page, $conversation->uuid, $referenceType);
+        }
+
+        if ($baseUrl === null || ($parts = parse_url($baseUrl)) === false || !isset($parts['host'])) {
+            return null;
+        }
+
+        $context = $this->urls->getContext();
+        $previous = [$context->getScheme(), $context->getHost(), $context->getHttpPort(), $context->getHttpsPort()];
+        $context->setScheme($parts['scheme'] ?? 'https');
+        $context->setHost($parts['host']);
+        if (isset($parts['port'])) {
+            $context->setHttpPort($parts['port']);
+            $context->setHttpsPort($parts['port']);
+        }
+
+        try {
+            return $this->generate($page, $conversation->uuid, $referenceType);
+        } finally {
+            $context->setScheme($previous[0]);
+            $context->setHost($previous[1]);
+            $context->setHttpPort($previous[2]);
+            $context->setHttpsPort($previous[3]);
+        }
     }
 
     /**

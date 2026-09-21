@@ -12,6 +12,8 @@ use HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\PushOptions;
 use HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa\SendChatPushMessage;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Messenger\Attribute\AsMessage;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBus;
@@ -39,10 +41,12 @@ final class MessageSentListenerTest extends TestCase
             self::assertInstanceOf(SendChatPushMessage::class, $queued);
             self::assertSame(42, $queued->messageId);
             self::assertSame([9, 10], $queued->recipientIds);
+            // The handler may run without a request, so the host travels with the message.
+            self::assertSame('https://example.org', $queued->baseUrl);
 
             return new Envelope($queued);
         });
-        new MessageSentListener($bus, new PushOptions(true, 3))($this->event());
+        new MessageSentListener($bus, new PushOptions(true, 3), $this->requests())($this->event());
     }
 
     public function testContaoTransportRoutingQueuesWithoutCallingHandler(): void
@@ -62,15 +66,36 @@ final class MessageSentListenerTest extends TestCase
             )),
             $handlerMiddleware,
         ]);
-        new MessageSentListener($bus, new PushOptions(true, 3))($this->event());
+        new MessageSentListener($bus, new PushOptions(true, 3), $this->requests())($this->event());
     }
 
     public function testDisabledOrUnconfiguredDoesNotEnqueue(): void
     {
         $bus = $this->createMock(MessageBusInterface::class);
         $bus->expects(self::never())->method('dispatch');
-        new MessageSentListener($bus, new PushOptions())($this->event());
-        new MessageSentListener($bus, new PushOptions(true))($this->event());
+        new MessageSentListener($bus, new PushOptions(), $this->requests())($this->event());
+        new MessageSentListener($bus, new PushOptions(true), $this->requests())($this->event());
+    }
+
+    public function testWithoutARequestNoHostIsClaimed(): void
+    {
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus->expects(self::once())->method('dispatch')->willReturnCallback(static function (SendChatPushMessage $queued): Envelope {
+            self::assertNull($queued->baseUrl);
+
+            return new Envelope($queued);
+        });
+        new MessageSentListener($bus, new PushOptions(true, 3), $this->requests(null))($this->event());
+    }
+
+    private function requests(?string $host = 'https://example.org'): RequestStack
+    {
+        $stack = new RequestStack();
+        if ($host !== null) {
+            $stack->push(Request::create($host . '/chat'));
+        }
+
+        return $stack;
     }
 
     private function event(): MessageSentEvent
