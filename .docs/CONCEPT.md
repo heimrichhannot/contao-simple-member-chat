@@ -1566,3 +1566,45 @@ Request-Kontext verlassen. Was im Web-Worker funktioniert, kann im
 Cron-Worker still etwas anderes erzeugen. Im README steht jetzt außerdem,
 dass die Domain der Root-Seite gesetzt sein sollte.
 
+### Befund: Push kam auf dem iPhone nicht an
+
+Gemeldet am 2026-09-21. Chrome und Firefox erhielten Benachrichtigungen,
+das iPhone nie.
+
+**Erster Verdacht war falsch.** Naheliegend wäre die Verschlüsselung
+gewesen: Das PWA-Bundle erzeugt `new Subscription($endpoint, $publicKey,
+$authToken)` ohne Angabe, und `minishlink/web-push` verwendet dann das
+ältere `aesgcm`. Ein Testversand an den echten Apple-Endpunkt widerlegte
+das, beide Varianten scheiterten gleich.
+
+**Tatsächliche Ursache.** Apple lehnt das VAPID-Token ab, wenn der
+`sub`-Anspruch keine echte Kontaktadresse ist. Gemessen am selben
+Endpunkt:
+
+| Subject | Antwort |
+| --- | --- |
+| `mailto:demo@example.invalid` | 403 BadJwtToken |
+| `mailto:webmaster@example.com` | 201 OK |
+| `https://example.com` | 201 OK |
+
+`.invalid` ist eine reservierte Domain, die nie auflösen kann. Chrome und
+Firefox akzeptieren sie trotzdem, deshalb schlug nur iOS fehl. Der Wert
+stammte aus der Demo-Einrichtung dieses Projekts.
+
+**Belegt.** Vor der Korrektur stand der Apple-Abonnent seit seiner
+Anlage auf `lastSuccessfulSend = 0`, während die Chrome- und
+Firefox-Abonnenten erfolgreiche Zustellungen zeigten. Nach der Korrektur
+führten zwei echte Chat-Nachrichten zu je einer erfolgreichen Zustellung
+an denselben Apple-Endpunkt.
+
+**Dauerhafte Absicherung.** Das PWA-Bundle prüft den VAPID-Subject jetzt
+und schreibt einen erklärenden Fehler ins Systemprotokoll, wenn er kein
+`mailto:`/`https:` ist oder eine reservierte Domain nutzt. Der Versand an
+die anderen Dienste läuft weiter, damit eine bestehende Installation
+nicht bricht. Das README des PWA-Bundles beschreibt die Anforderung.
+
+**Lehre.** Ein Push-Dienst kann etwas akzeptieren, das ein anderer
+ablehnt. Wer nur in einem Browser testet, hält eine kaputte
+Konfiguration für gesund. Für Diagnosen ist der Rückgabewert des
+Push-Dienstes die einzige harte Quelle.
+
