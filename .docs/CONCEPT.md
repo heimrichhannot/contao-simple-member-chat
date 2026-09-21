@@ -1056,9 +1056,14 @@ den Abschnitt, in dem die Entscheidung eingearbeitet ist.
 9. **iOS-Tastatur.** Entschieden 2026-09-16: `visualViewport`-Handler im
    Bundle-Skript plus Viewport-Meta für Android als Projektvoraussetzung.
    Details in der Tabelle „Mobile Details" in 5.1.
-10. **Turbo Drive.** Entschieden 2026-09-16: Chat-Navigationslinks tragen
-   `data-turbo="true"`, README empfiehlt PWA-Projekten die Drive-Entry.
-   Skript-Lebenszyklus über `turbo:load` und `turbo:before-cache`.
+10. **Turbo Drive.** Entschieden 2026-09-16, **revidiert 2026-09-21**: Das
+   Bundle ändert das Navigationsmodell des Projekts nicht mehr. Bei
+   abgeschaltetem Drive markiert das Skript die Chat-Navigationslinks zur
+   Laufzeit mit `data-turbo="false"`, sodass der Browser normal navigiert; bei
+   aktivem Drive bleibt alles wie zuvor. Ursprünglich trugen die Links fest
+   `data-turbo="true"`, was auf Seiten ohne Drive fremde Skripte lahmlegte.
+   Skript-Lebenszyklus weiterhin über `turbo:load`, `turbo:render`, `pageshow`
+   und `turbo:before-cache`.
 11. **Barrierefreiheit.** Entschieden 2026-09-16: vollständig aufnehmen,
    Details in 5.6a. Fokus-Handling gehört ins Skript, Rollen und Labels in
    die Templates, beides von Anfang an.
@@ -1486,4 +1491,43 @@ und der Test-Abonnent wurden nach dem Test entfernt. Im Demo bleiben das
 PWA-Bundle, die VAPID-Konfiguration, die PWA-Konfiguration und die
 Chat-Push-Einstellungen bestehen. Die VAPID-Schlüssel gelten nur für dieses
 Demo und gehören nicht in ein anderes Projekt.
+
+### Befund: Turbo Drive legte fremde Skripte lahm
+
+Gemeldet am 2026-09-21: Nach dem Wechsel zwischen Chat-Liste und
+Konversation funktionierte der „Push abonnieren"-Button des PWA-Bundles
+nicht mehr, erst ein vollständiger Seitenaufbau half. Ohne Abonnement
+kommen auch keine Benachrichtigungen an.
+
+**Ursache.** Turbo entscheidet so (verifiziert in
+`node_modules/@hotwired/turbo/dist/turbo.es2017-esm.js`,
+`elementIsNavigatable`):
+
+```js
+if (config.drive.enabled || withinFrame) { /* navigierbar außer data-turbo="false" */ }
+else { /* nicht navigierbar außer data-turbo="true" */ }
+```
+
+Unsere Navigationslinks trugen fest `data-turbo="true"` und liegen teils in
+einem Frame. Auf einer Seite mit `huh_ux_turbo_encore_no_drive` führte das zu
+Drive-Navigation, obwohl das Projekt Drive abgewählt hatte. Fremde Skripte
+binden ihre Handler einmal beim Laden; nach dem Austausch des Dokuments zeigen
+ihre Referenzen auf entfernte Elemente.
+
+**Reproduktion.** Vor einer Turbo-Navigation trug der Button seinen
+Klick-Handler, danach war es ein neues Element ohne Handler, und das PWA-Bundle
+hielt noch das alte, nicht mehr verbundene Element fest.
+
+**Behebung.** Die Templates tragen kein `data-turbo` mehr, sondern die
+Markierung `data-chat-navigation`. Das Skript setzt darauf bei abgeschaltetem
+Drive `data-turbo="false"`, bei aktivem Drive entfernt es das Attribut. Die
+Weiterleitung nach einem Kontaktstart nutzt entsprechend `Turbo.visit()` oder
+`location.assign()`.
+
+**Nachgemessen.** Nach dem Fix erzeugt ein Klick einen echten Seitenaufbau, der
+Button hat seinen Handler und das PWA-Bundle verweist auf ein lebendes Element.
+
+**Lehre.** Ein Bundle darf das Navigationsmodell der Seite nicht einseitig
+ändern. Die ursprüngliche Entscheidung 10 wog die App-Anmutung höher als die
+Verträglichkeit mit fremdem Code; das war falsch herum.
 
