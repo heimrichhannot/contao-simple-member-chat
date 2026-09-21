@@ -238,8 +238,26 @@ function scrollBottom() {
     }
 }
 
+// The project decides whether Turbo Drive is on. Links inside a turbo-frame are
+// navigatable regardless of that setting, so without an explicit opt-out the chat
+// would silently drive-navigate a site that disabled Drive, leaving every script
+// that binds on page load (push subscription buttons, project code) without its
+// handlers until a full reload.
+function driveEnabled() {
+    return Turbo?.session?.drive !== false
+}
+
+function markNavigation() {
+    const drive = driveEnabled()
+    document.querySelectorAll('[data-chat-navigation]').forEach(link => {
+        if (drive) link.removeAttribute('data-turbo')
+        else link.setAttribute('data-turbo', 'false')
+    })
+}
+
 function discover() {
     if (!active) return
+    markNavigation()
     for (const [frame, state] of frames) {
         if (!frame.isConnected) {
             clearTimeout(state.timer)
@@ -478,7 +496,8 @@ document.addEventListener("turbo:before-fetch-response", event => {
     const response = event.detail.fetchResponse
     if (event.target.matches?.("[data-chat-open]") && response.redirected && response.succeeded) {
         event.preventDefault()
-        Turbo.visit(response.location.href)
+        if (driveEnabled()) Turbo.visit(response.location.href)
+        else window.location.assign(response.location.href)
     }
 })
 

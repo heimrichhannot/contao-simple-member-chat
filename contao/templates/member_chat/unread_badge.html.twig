@@ -3,7 +3,7 @@
 <turbo-frame{{ attrs().mergeWith(attributes|default({})).set('id', 'chat-unread').set('lang', language).set('aria-live', 'off').set('data-chat-poll', 'badge').set('data-chat-mode', 'full').set('data-chat-url', poll_url).set('data-chat-poll-interval', options.badgeInterval).set('data-chat-poll-max-interval', options.badgeInterval * options.maxIntervalMultiplier) }}>
     {%- if count > 0 -%}
         {% set label = 'member_chat.unread'|trans({'%count%': count}) %}
-        {% if url %}<a href="{{ url }}" data-turbo="true" data-turbo-frame="_top" aria-label="{{ label }}">{{ count }}</a>{% else %}<span aria-label="{{ label }}">{{ count }}</span>{% endif %}
+        {% if url %}<a href="{{ url }}" data-turbo-frame="_top" data-chat-navigation aria-label="{{ label }}">{{ count }}</a>{% else %}<span aria-label="{{ label }}">{{ count }}</span>{% endif %}
     {%- endif -%}
 </turbo-frame>
 {% endblock %}

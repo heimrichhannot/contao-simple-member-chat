@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-base=${CHAT_BASE_URL:-https://127.0.0.1:32773}
+# DDEV assigns a new host port on every restart, so resolve it instead of pinning it.
+ddev_project=${CHAT_DDEV_PROJECT:-contao0507.contao}
+base=${CHAT_BASE_URL:-$(ddev describe -j "$ddev_project" 2>/dev/null | python3 -c "import sys,json;print(next(u for u in json.load(sys.stdin)['raw']['urls'] if u.startswith('https://127.0.0.1')))" 2>/dev/null)}
+if [ -z "$base" ]; then
+    echo "Could not resolve the demo URL. Set CHAT_BASE_URL or CHAT_DDEV_PROJECT." >&2
+    exit 1
+fi
 chat_uuid=01a0ae9d-2c0d-7b36-8209-a415ae1e4ed5
 foreign_uuid=01a0ae9e-4c90-7a3e-a0e8-ad8caacf4c85
 out=$(mktemp -d /tmp/member-chat-http.XXXXXX)

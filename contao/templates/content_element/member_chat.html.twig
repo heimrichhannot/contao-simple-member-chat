@@ -14,7 +14,7 @@
                 <section class="member-chat__conversation">
                     {% if conversation_uuid %}
                         {% block conversation_header %}
-                            <header class="member-chat__header"><a href="{{ back_url }}" data-turbo="true">{{ 'member_chat.back'|trans }}</a><h2>{{ view.partner.displayName }}</h2>{% include '@Contao/member_chat/mute.html.twig' %}</header>
+                            <header class="member-chat__header"><a href="{{ back_url }}" data-chat-navigation>{{ 'member_chat.back'|trans }}</a><h2>{{ view.partner.displayName }}</h2>{% include '@Contao/member_chat/mute.html.twig' %}</header>
                         {% endblock %}
                         {% block messages %}{% include '@Contao/member_chat/message_list.html.twig' %}{% endblock %}
                         {% include '@Contao/member_chat/new_messages.html.twig' %}

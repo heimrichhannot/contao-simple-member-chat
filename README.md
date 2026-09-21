@@ -11,8 +11,9 @@ moderation. Updates use Turbo Frame polling. Package:
 - A configured `heimrichhannot/contao-encore-bundle` installation and asset build.
   Enable Encore for legacy page layouts too.
 - Project-provided `heimrichhannot/contao-ux-turbo-encore`: activate either
-  `huh_ux_turbo_encore` (Drive; recommended for PWA projects) or
-  `huh_ux_turbo_encore_no_drive`. The chat does not import a second Turbo.
+  `huh_ux_turbo_encore` (Drive) or `huh_ux_turbo_encore_no_drive`. The chat does
+  not import a second Turbo and **does not change your Drive setting**: see
+  [Turbo Drive and other scripts](#turbo-drive-and-other-scripts).
 - For Android keyboard resizing, the page layout needs
   `<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">`.
 
@@ -115,6 +116,27 @@ maximum interval; responses never carry a self-referencing `src`. The poller
 loads/reloads full frames and continues polling at zero. It pauses in hidden
 tabs or hidden navigation containers and backs off after failures. Function
 usage marks the complete response private/no-store, including anonymous renders.
+
+## Turbo Drive and other scripts
+
+Frames and polling work with either Turbo entry. Switching between the
+conversation list and a conversation is a page navigation, and the bundle leaves
+the navigation model to the project:
+
+* With `huh_ux_turbo_encore_no_drive`, chat navigation links are marked
+  `data-turbo="false"` at runtime, so the browser performs an ordinary page load.
+  Scripts that bind their handlers once per page load keep working.
+* With `huh_ux_turbo_encore`, the project has opted into Drive site-wide and chat
+  links behave like every other link on the site.
+
+This matters because a link inside a `<turbo-frame>` is navigatable regardless of
+the Drive setting. Without the explicit opt-out the chat would drive-navigate a
+site that deliberately disabled Drive, and every script that binds on page load
+would lose its handlers until a full reload. The push subscription button of
+`contao-pwa-bundle` is one such script.
+
+If you enable Drive, make your own scripts Turbo-aware: bind on `turbo:load`
+rather than `DOMContentLoaded`, and re-resolve elements after each render.
 
 ## Contact providers
 
