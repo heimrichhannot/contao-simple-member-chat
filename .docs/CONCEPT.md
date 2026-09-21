@@ -1626,3 +1626,26 @@ Bewusst nicht gewählt: den Namen ganz aus dem Markup nehmen. Das hätte
 Screenreader-Nutzern die Information genommen, die sehende Nutzer aus
 Ausrichtung und Farbe ablesen.
 
+### Auswählbare Klassen in der Konversationsliste
+
+Gewünscht am 2026-09-21: Der offene Eintrag braucht eine CSS-Klasse, und
+der Ungelesen-Zähler muss ansprechbar sein.
+
+Umgesetzt: Jeder Teil eines Listeneintrags trägt jetzt eine Klasse mit
+Präfix `member-chat__` (Avatar, Partnername, Auszug, Status, Ungelesen,
+Stumm). Der offene Eintrag bekommt zusätzlich
+`member-chat__list-item--current` und `aria-current="page"`, womit auch
+Screenreader den aktuellen Eintrag erkennen.
+
+Die Markierung entsteht serverseitig. Die Adresse des Listen-Frames trägt
+die offene Konversation als Parameter `current`, den der Frame-Controller
+nur auf Syntax prüft und in den Kontext legt. Damit behalten auch Polls,
+Stream-Aktualisierungen und das Nachladen älterer Einträge die Markierung,
+ohne dass Client-Code den Zustand nachführen muss.
+
+Beim Prüflauf fiel auf, dass eine Zusicherung des HTTP-Skripts am
+Anzeigenamen eines Demo-Mitglieds hing, das inzwischen umbenannt worden
+war. Die Wort-Prefix-Garantie liegt ohnehin im Integrationstest mit
+kontrollierter Fixture; die Skript-Zusicherung prüft jetzt nur noch, dass
+überhaupt ein Treffer zurückkommt.
+

@@ -1,5 +1,31 @@
-<a{{ attrs().set('id', 'chat-conversation-' ~ item.uuid).addClass('member-chat__list-item').set('href', item.url).set('data-turbo-frame', '_top').set('data-chat-navigation', '').set('data-chat-last-message-at', item.lastMessageAt).set('data-chat-changed-at', item.changedAt).set('data-chat-uuid', item.uuid).mergeWith(conversation_item_attributes|default) }}>
-    {% block partner %}{% if item.partner.avatarUrl %}<img src="{{ item.partner.avatarUrl }}" alt="" width="48" height="48">{% else %}<span aria-hidden="true">{{ item.partner.displayName|slice(0, 1) }}</span>{% endif %}<strong>{{ item.partner.displayName }}</strong>{% endblock %}
-    {% block excerpt %}<span>{{ item.excerpt }}</span>{% endblock %}
-    {% block status %}{% if item.muted %}<span aria-label="{{ 'member_chat.muted'|trans }}">🔕</span>{% elseif item.unreadCount %}<span aria-label="{{ 'member_chat.unread'|trans({'%count%': item.unreadCount}) }}">{{ item.unreadCount }}</span>{% endif %}{% endblock %}
+{%- set is_current = conversation_uuid|default('') == item.uuid -%}
+<a{{ attrs()
+    .set('id', 'chat-conversation-' ~ item.uuid)
+    .addClass('member-chat__list-item')
+    .addClass('member-chat__list-item--current', is_current)
+    .set('aria-current', 'page', is_current)
+    .set('href', item.url)
+    .set('data-turbo-frame', '_top')
+    .set('data-chat-navigation', '')
+    .set('data-chat-last-message-at', item.lastMessageAt)
+    .set('data-chat-changed-at', item.changedAt)
+    .set('data-chat-uuid', item.uuid)
+    .mergeWith(conversation_item_attributes|default)
+}}>
+    {% block partner %}
+        {%- if item.partner.avatarUrl -%}
+            <img{{ attrs().addClass('member-chat__avatar').set('src', item.partner.avatarUrl).set('alt', '').set('width', 48).set('height', 48).mergeWith(avatar_attributes|default) }}>
+        {%- else -%}
+            <span{{ attrs().addClass('member-chat__avatar').addClass('member-chat__avatar--initial').set('aria-hidden', 'true').mergeWith(avatar_attributes|default) }}>{{ item.partner.displayName|slice(0, 1) }}</span>
+        {%- endif -%}
+        <strong{{ attrs().addClass('member-chat__partner').mergeWith(partner_attributes|default) }}>{{ item.partner.displayName }}</strong>
+    {% endblock %}
+    {% block excerpt %}<span{{ attrs().addClass('member-chat__excerpt').mergeWith(excerpt_attributes|default) }}>{{ item.excerpt }}</span>{% endblock %}
+    {% block status %}
+        {%- if item.muted -%}
+            <span{{ attrs().addClass('member-chat__status').addClass('member-chat__muted').set('aria-label', 'member_chat.muted'|trans).mergeWith(status_attributes|default) }}>🔕</span>
+        {%- elseif item.unreadCount -%}
+            <span{{ attrs().addClass('member-chat__status').addClass('member-chat__unread').set('aria-label', 'member_chat.unread'|trans({'%count%': item.unreadCount})).mergeWith(status_attributes|default) }}>{{ item.unreadCount }}</span>
+        {%- endif -%}
+    {% endblock %}
 </a>

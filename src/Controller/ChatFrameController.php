@@ -51,6 +51,9 @@ final readonly class ChatFrameController
 
         $cursor = $before === '' ? null : array_map(intval(...), explode(',', $before));
         $context = $this->contexts->create($page);
+        // Only a marker for the list: never looked up, so a syntax check is enough.
+        $current = $request->query->getString('current');
+        $context['conversation_uuid'] = preg_match('/^' . ConversationAccess::UUID_PATTERN . '$/D', $current) === 1 ? $current : null;
         $context['history'] = $cursor !== null;
         $context['view'] = $this->reader->read($page, $viewerId, includeList: true, since: $since, beforeTimestamp: $cursor[0] ?? null, beforeId: $cursor[1] ?? null);
         if ($since !== null || $cursor !== null) {

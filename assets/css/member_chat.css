@@ -24,6 +24,9 @@
         --member-chat-muted-bg: #334155;
         --member-chat-muted-fg: #fff;
         --member-chat-day-fg: #475569;
+        --member-chat-current-bg: #e2e8f0;
+        --member-chat-unread-bg: var(--member-chat-accent);
+        --member-chat-unread-fg: #fff;
         color: var(--member-chat-bubble-fg);
         background: var(--member-chat-background);
     }
@@ -38,6 +41,8 @@
     .member-chat__header a, .member-chat button, .member-chat__list-item { min-height: 44px; min-width: 44px; padding: .65rem; }
     .member-chat__list-item { display: grid; gap: .25rem; color: inherit; border-bottom: 1px solid var(--member-chat-border); text-decoration: none; overflow-wrap: anywhere; }
     .member-chat__sidebar { overflow-y: auto; min-height: 0; }
+    .member-chat__list-item--current { background: var(--member-chat-current-bg); }
+    .member-chat__unread { background: var(--member-chat-unread-bg); color: var(--member-chat-unread-fg); border-radius: 999px; padding: 0 .5em; }
     .member-chat__messages { flex: 1; min-height: 0; overflow-y: auto; overflow-anchor: none; padding: var(--member-chat-gap); }
     .member-chat__message { width: fit-content; max-width: 90%; margin: 0 0 .75rem; padding: .75rem; border-radius: var(--member-chat-radius); background: var(--member-chat-bubble-bg); overflow-wrap: anywhere; }
     .member-chat__message--own { margin-left: auto; background: var(--member-chat-bubble-own-bg); }

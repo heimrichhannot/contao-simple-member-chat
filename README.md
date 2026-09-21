@@ -331,6 +331,26 @@ uses UUID, so equal-time ordering can differ. Day boundaries use the server
 calendar/timezone; relative message time uses the page language and device
 timezone, retaining the full `datetime` and tooltip.
 
+### Conversation list markup
+
+Every part of a list item carries a class, so a project can style it without
+reaching for structural selectors:
+
+| Element | Class |
+| --- | --- |
+| The link itself | `member-chat__list-item` |
+| The open conversation | additionally `member-chat__list-item--current` and `aria-current="page"` |
+| Avatar or initial | `member-chat__avatar`, initials additionally `member-chat__avatar--initial` |
+| Partner name | `member-chat__partner` |
+| Last message excerpt | `member-chat__excerpt` |
+| Unread count | `member-chat__status member-chat__unread` |
+| Muted marker | `member-chat__status member-chat__muted` |
+
+The open conversation is marked server-side: the list frame URL carries the
+current conversation as a `current` parameter, so polls and history loads keep
+the marker. `--member-chat-current-bg`, `--member-chat-unread-bg` and
+`--member-chat-unread-fg` set the default colours.
+
 ### Sender names
 
 A one to one conversation has exactly one possible sender per side, so the

@@ -45,7 +45,10 @@ final readonly class ChatContextFactory
             'options' => $this->options,
             'request_token' => $this->tokens->getDefaultTokenValue(),
             'back_url' => $this->pages->generate($page),
-            'list_url' => $this->routes->generate('contao_member_chat_conversations', $parameters),
+            // The list frame keeps the open conversation so polls and history keep the marker.
+            'list_url' => $this->routes->generate('contao_member_chat_conversations', $conversation instanceof Conversation ? $parameters + [
+                'current' => $conversation->uuid,
+            ] : $parameters),
             'search_url' => $this->routes->generate('contao_member_chat_contacts'),
             'open_url' => $this->routes->generate('contao_member_chat_conversation_create'),
             'conversation_uuid' => $conversation?->uuid,

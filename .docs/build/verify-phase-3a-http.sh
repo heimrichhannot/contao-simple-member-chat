@@ -51,6 +51,7 @@ request open 303 -b "$out/alice.cookies" --data-urlencode "REQUEST_TOKEN@$out/to
 request legacy 200 -b "$out/alice.cookies" "$base/phase3a-chat-legacy/$chat_uuid.html"
 request modern 200 -b "$out/alice.cookies" "$base/phase3a-chat-modern/$chat_uuid.html"
 request list 200 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86"
+request current-list 200 -b "$out/alice.cookies" "$base/_member_chat/conversations?page=86&current=$chat_uuid"
 initial_cursor=$(python3 - "$out/list.html" <<'PYCODE'
 from pathlib import Path
 import re, sys
@@ -145,7 +146,16 @@ for layout in ['legacy','modern']:
     source=(p/(layout+'.html')).read_text()
     assert re.search(r'<turbo-frame[^>]*id="chat-messages"[^>]*\ssrc=', source), layout+' page must embed messages frame with src'
 assert '>Send</button>' in (p/'locale.html').read_text()
-assert 'Chat Carol' in (p/'word-search.html').read_text()
+# Only that a word prefix query returns something: the demo member names are editable.
+# The behavioural guarantee lives in ContactsTest::testWordPrefixesEscapeWildcards...
+assert 'data-chat-open' in (p/'word-search.html').read_text()
+current=(p/'current-list.html').read_text()
+assert 'member-chat__list-item--current' in current and 'aria-current="page"' in current
+assert current.count('member-chat__list-item--current') == 1
+assert 'member-chat__list-item--current' not in (p/'list.html').read_text()
+assert 'member-chat__unread' in (p/'list.html').read_text()
+legacy=(p/'legacy.html').read_text()
+assert re.search(r'id="chat-conversations"[^>]*src="[^"]*current=', legacy)
 assert 'No contacts found.' in (p/'no-contacts.html').read_text()
 assert 'No contacts found.' not in (p/'short-search.html').read_text()
 def header(name, key):
