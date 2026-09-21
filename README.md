@@ -74,10 +74,8 @@ contao_member_chat:
 Options are available through immutable `Configuration\ChatOptions`. Unknown
 provider aliases fail at container compilation. Extra provider configuration
 nodes are retained; custom providers must validate and wire their own options.
-The built-in `shared_groups` alias needs no options and uses the viewer's active
-groups. Both built-ins filter disabled/non-login/time-restricted target accounts.
-`member_groups` does not require the viewer to belong to the target groups.
-Search matches literal field/word prefixes, not arbitrary substrings.
+The built-in providers and their options are described under
+[Contact providers](#contact-providers).
 
 Activity-only updates to `lastReadAt` **and `lastPageId`** are throttled. Switching
 chat pages can therefore leave the old deep-link destination until the throttle
@@ -119,6 +117,68 @@ tabs or hidden navigation containers and backs off after failures. Function
 usage marks the complete response private/no-store, including anonymous renders.
 
 ## Contact providers
+
+A contact provider decides whom a member can find in the search and whom they
+may start a conversation with. The bundle never assumes that every member may
+contact every other member: exactly one provider is active, chosen by the
+`contact_provider` option.
+
+### Built-in providers
+
+Two providers ship with the bundle.
+
+| Alias | Finds | Options |
+| --- | --- | --- |
+| `member_groups` | members of the configured member groups | `groups`: list of `tl_member_group` IDs |
+| `shared_groups` | members who share at least one active group with the viewer | none |
+
+`member_groups` is the default. It answers the question "who belongs to the
+groups this site allows chatting with", independent of the viewer's own groups.
+That makes asymmetric setups possible: a support agent outside the group can
+write to its members, while a member of the group cannot start a conversation
+with the agent. **Its `groups` option is empty by default and an empty list
+matches nobody**, so the search stays empty until the host configures group IDs:
+
+```yaml
+contao_member_chat:
+    contact_provider: member_groups
+    providers:
+        member_groups:
+            groups: [2, 5]       # positive tl_member_group IDs
+```
+
+`shared_groups` answers "who is in one of my groups". It needs no options and
+is the natural choice when groups already model the circles that may talk to
+each other, for example one group per department or per team. The relation is
+symmetric: if two members share a group, both can find and contact each other.
+
+```yaml
+contao_member_chat:
+    contact_provider: shared_groups
+```
+
+Both built-ins behave identically in every other respect:
+
+* Only accounts that may log in are offered: `disable = 0`, `login = 1`, and the
+  `start`/`stop` window must include the current time.
+* The viewer's own group list, which `shared_groups` matches against, counts only
+  groups that are themselves active in `tl_member_group`: a disabled or expired
+  group drops out. The groups read from a *target* account are taken as stored,
+  so group activity narrows who may search, not who may be found.
+* Search matches a literal prefix of a whole word in `firstname`, `lastname` or
+  `username`, so `Car` finds `Chat Carol` but `arol` finds nothing. `%`, `_` and
+  the escape character are escaped, never interpreted.
+* Group membership is stored serialised in `tl_member.groups`, so the group
+  filter runs in PHP after the SQL filter. The result limit applies after that
+  filter. This is fine at club or intranet scale and is the deliberate trade-off
+  documented in the concept; it has not been benchmarked on large member bases.
+* An empty group list short-circuits: no query is issued, the search is empty and
+  `canContact()` is false.
+
+Only starting a new conversation consults the provider. An existing conversation
+stays readable and writable even after the contact permission is revoked.
+
+### Writing your own provider
 
 Implement `Contact\ContactProviderInterface` in an autowired/autoconfigured
 service. Its interface attribute registers the provider; no manual service tag
