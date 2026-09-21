@@ -5,6 +5,8 @@ contact search, unread counts, muted conversations, history loading and backend
 moderation. Updates use Turbo Frame polling. Package:
 `heimrichhannot/contao-simple-member-chat` (LGPL-3.0-or-later).
 
+![Screenshot Chat UI](docs/img/screenshot.png)
+
 ## Requirements and installation
 
 - PHP **8.4+**, Contao **5.7**, Symfony 7.4, Doctrine DBAL 3.10.
