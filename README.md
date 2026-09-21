@@ -6,7 +6,7 @@ moderation. Updates use Turbo Frame polling. Package:
 `heimrichhannot/contao-simple-member-chat` (LGPL-3.0-or-later).
 
 <p align="center">
-<img src="docs/img/screenshot.png" alt="Screenshot Chat UI" style="max-width: 800px; height: auto; border: 2px solid #ccc; border-radius: 4px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+<img src="docs/img/screenshot.png" alt="Screenshot Chat UI" width="800">
 </p>
 
 ## Requirements and installation
