@@ -1,8 +1,18 @@
 # Changelog
 
-## 0.1.0 — Unreleased
+## 0.1.1 — 2026-09-21
 
-First release preparation:
+- The conversation list is now styleable: every part of a list item carries a
+  `member-chat__` class, and the open conversation is marked with
+  `member-chat__list-item--current` and `aria-current="page"`. The marker is
+  rendered server-side, so polls and history loads keep it.
+- New custom properties `--member-chat-current-bg`, `--member-chat-unread-bg`
+  and `--member-chat-unread-fg` for the default colours.
+- Documentation screenshot.
+
+## 0.1.0 — 2026-09-21
+
+First release:
 
 - Private 1:1 member text conversations, provider-controlled contact search,
   UUID links, throttled activity tracking and muted unread counts.
