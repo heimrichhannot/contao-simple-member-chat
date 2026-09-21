@@ -1608,3 +1608,21 @@ ablehnt. Wer nur in einem Browser testet, hält eine kaputte
 Konfiguration für gesund. Für Diagnosen ist der Rückgabewert des
 Push-Dienstes die einzige harte Quelle.
 
+### Absendername in 1:1-Konversationen
+
+Gewünscht am 2026-09-21: Der Name über jeder Nachricht ist bei 1:1
+überflüssig, soll für spätere Gruppenchats aber erhalten bleiben.
+
+Umgesetzt über ein Feld `MessageView::showAuthor`, das die
+`ChatViewFactory` aus der Teilnehmerzahl ableitet: mehr als zwei
+Teilnehmer bedeutet wahr. Das Template rendert den Namen weiterhin
+immer, hängt aber bei falschem Flag die Klasse
+`member-chat__visually-hidden` an. Der Name verschwindet damit optisch,
+bleibt aber im Zugänglichkeitsbaum, sodass die Live-Region weiterhin
+sagt, wer geschrieben hat. Für Gruppenchats muss später nur die
+Teilnehmerzahl stimmen, weder Template noch CSS ändern sich.
+
+Bewusst nicht gewählt: den Namen ganz aus dem Markup nehmen. Das hätte
+Screenreader-Nutzern die Information genommen, die sehende Nutzer aus
+Ausrichtung und Farbe ablesen.
+

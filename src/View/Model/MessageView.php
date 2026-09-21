@@ -16,6 +16,11 @@ final readonly class MessageView
         public bool $own,
         public bool $readByPartner,
         public ?DaySeparatorView $daySeparator = null,
+        /**
+         * A one to one conversation has exactly one possible sender per side, so the
+         * name adds nothing. Group conversations set this and the template shows it.
+         */
+        public bool $showAuthor = false,
     ) {
     }
 }

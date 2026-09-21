@@ -270,4 +270,25 @@ final class FrontendTest extends ContaoTestCase
             $gateway->findMembers([9]);
         }
     }
+
+    public function testOneToOneMessagesHideTheAuthorWhileGroupsShowIt(): void
+    {
+        $members = self::createStub(ContactGatewayInterface::class);
+        $members->method('findMembers')->willReturn([[
+            'id' => 7,
+            'username' => 'Partner',
+        ]]);
+        $resolver = new ContactResolver($members, new ContactFactory(new ChatOptions(), self::createStub(Studio::class), self::createStub(ContaoFramework::class)), self::createStub(TranslatorInterface::class));
+        $urls = self::createStub(ContentUrlGenerator::class);
+        $urls->method('generate')->willReturn('/chat/uuid');
+        $factory = new ChatViewFactory($resolver, new ConversationUrlGenerator(self::createStub(ContaoFramework::class), $urls, self::createStub(ParticipantGatewayInterface::class)), new DaySeparatorFactory(self::createStub(TranslatorInterface::class)));
+        $page = $this->createClassWithPropertiesStub(PageModel::class);
+        $messages = [new Message(1, 1, 7, 'Hi', 100)];
+
+        $oneToOne = $factory->create($page, 9, [], $messages, 7, 0, participantCount: 2);
+        $group = $factory->create($page, 9, [], $messages, 7, 0, participantCount: 3);
+
+        self::assertFalse($oneToOne->messages[0]->showAuthor);
+        self::assertTrue($group->messages[0]->showAuthor);
+    }
 }

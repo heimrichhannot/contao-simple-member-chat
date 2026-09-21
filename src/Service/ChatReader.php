@@ -33,9 +33,11 @@ final readonly class ChatReader
         $partnerReadId = 0;
         $moreMessages = false;
         $muted = false;
+        $participantCount = 0;
         if ($conversation instanceof Conversation) {
             $partners = array_values(array_filter($this->participants->memberIds($conversation->id), static fn (int $id): bool => $id !== $viewerId));
             $partnerId = $partners[0] ?? 0;
+            $participantCount = \count($partners) + 1;
             $partnerReadId = $this->participants->state($conversation->id, $partnerId)['lastReadMessageId'] ?? 0;
             $muted = $this->participants->state($conversation->id, $viewerId)['muted'] ?? false;
             if ($includeMessages) {
@@ -60,6 +62,6 @@ final readonly class ChatReader
             array_pop($items);
         }
 
-        return $this->views->create($page, $viewerId, $items, $messages, $partnerId, $partnerReadId, $moreMessages, $moreConversations, $muted);
+        return $this->views->create($page, $viewerId, $items, $messages, $partnerId, $partnerReadId, $moreMessages, $moreConversations, $muted, $participantCount);
     }
 }

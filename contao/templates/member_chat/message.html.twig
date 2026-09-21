@@ -1,5 +1,9 @@
 <article{{ attrs().set('id', 'chat-message-' ~ message.id).addClass('member-chat__message').addClass(message.own ? 'member-chat__message--own' : '').set('data-chat-message-id', message.id).set('data-chat-message-day', message.createdAt|date('Y-m-d')).mergeWith(message_attributes|default) }}>
-    {% block author %}<strong>{{ message.author.displayName }}</strong>{% endblock %}
+    {%- block author -%}
+        {#- One to one conversations need no name, but the log announcement still has to
+            say who wrote. Group conversations render it visibly. -#}
+        <strong{{ attrs().addClass('member-chat__author').addClass(message.showAuthor ? '' : 'member-chat__visually-hidden').mergeWith(author_attributes|default) }}>{{ message.author.displayName }}</strong>
+    {%- endblock -%}
     {% block body %}<p>{{ message.body|member_chat_autolink|nl2br }}</p>{% endblock %}
     {% block timestamp %}<time datetime="{{ message.createdAt|date('c') }}">{{ message.createdAt|date(datim_format) }}</time>{% endblock %}
     {% block message_status %}{% endblock %}

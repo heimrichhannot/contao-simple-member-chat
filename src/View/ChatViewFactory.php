@@ -25,7 +25,7 @@ final readonly class ChatViewFactory
     /** @param list<ConversationListItem> $items
      * @param list<Message> $messages
      */
-    public function create(PageModel $page, int $viewerId, array $items = [], array $messages = [], ?int $partnerId = null, int $partnerReadId = 0, bool $moreMessages = false, bool $moreConversations = false, bool $muted = false): ChatView
+    public function create(PageModel $page, int $viewerId, array $items = [], array $messages = [], ?int $partnerId = null, int $partnerReadId = 0, bool $moreMessages = false, bool $moreConversations = false, bool $muted = false, int $participantCount = 0): ChatView
     {
         $ids = $partnerId === null ? [] : [$partnerId];
         foreach ($items as $item) {
@@ -51,7 +51,7 @@ final readonly class ChatViewFactory
         foreach ($messages as $message) {
             $separator = $this->days->create($message->createdAt, (string) $page->language, (string) ($page->dateFormat !== null && $page->dateFormat !== '' ? $page->dateFormat : 'Y-m-d'));
             $lastId = max($lastId, $message->id);
-            $history[] = new MessageView($message->id, $contacts[$message->authorId], $message->body, $message->createdAt, $message->authorId === $viewerId, $partnerId !== null && $partnerId > 0 && $message->id <= $partnerReadId, $separator->day !== $previousDay ? $separator : null);
+            $history[] = new MessageView($message->id, $contacts[$message->authorId], $message->body, $message->createdAt, $message->authorId === $viewerId, $partnerId !== null && $partnerId > 0 && $message->id <= $partnerReadId, $separator->day !== $previousDay ? $separator : null, $participantCount > 2);
             $previousDay = $separator->day;
         }
 

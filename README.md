@@ -277,7 +277,7 @@ Readonly public view objects in `View\Model`:
 | --- | --- |
 | `ChatView` (`view`) | `conversations: list<ConversationItemView>`, `messages: list<MessageView>`, `partner: ?Contact`, `lastMessageId: int`, `changedAt: int`, `beforeMessageId: ?int`, `beforeConversation: ?string`, `muted: bool`, `conversationFingerprint: string` |
 | `ConversationItemView` | `uuid: string`, `partner: Contact`, `url: string`, `excerpt: string`, `lastMessageAt: int`, `changedAt: int`, `unreadCount: int`, `muted: bool` |
-| `MessageView` | `id: int`, `author: Contact`, `body: string`, `createdAt: int`, `own: bool`, `readByPartner: bool`, `daySeparator: ?DaySeparatorView` |
+| `MessageView` | `id: int`, `author: Contact`, `body: string`, `createdAt: int`, `own: bool`, `readByPartner: bool`, `daySeparator: ?DaySeparatorView`, `showAuthor: bool` |
 | `DaySeparatorView` | `day: string` (`Y-m-d`), `label: string` |
 
 Timestamps are Unix seconds. Context includes `page_id`, `language`,
@@ -326,6 +326,19 @@ polls. Database history sorts by timestamp/ID; client equal-time list ordering
 uses UUID, so equal-time ordering can differ. Day boundaries use the server
 calendar/timezone; relative message time uses the page language and device
 timezone, retaining the full `datetime` and tooltip.
+
+### Sender names
+
+A one to one conversation has exactly one possible sender per side, so the
+`author` block renders the name **visually hidden**: the live region still names
+the sender for screen readers, but nothing is repeated above every bubble.
+`MessageView::showAuthor` carries the decision and is true as soon as a
+conversation has more than two participants, which is where group conversations
+will pick it up without touching the template.
+
+To show names in one to one conversations as well, override the `author` block
+and drop the `member-chat__visually-hidden` class, or remove that class in your
+own CSS.
 
 ## Styling
 
