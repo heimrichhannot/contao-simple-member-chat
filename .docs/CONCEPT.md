@@ -1309,6 +1309,8 @@ outputs, decisions and end-to-end acceptance prerequisites.
 
 ## 16. Stand der Umsetzung
 
+Stand 2026-09-21, 47 Commits, nichts gepusht.
+
 | Phase | Inhalt | Stand |
 | --- | --- | --- |
 | 1 Fundament | Paket, Konfiguration, Schema, Domain, Gateways, Services, Events, Voter, Mitgliedslöschung | abgeschlossen |
@@ -1318,19 +1320,48 @@ outputs, decisions and end-to-end acceptance prerequisites.
 | 3c Fixes | fünf Befunde aus dem Browser-Review | abgeschlossen |
 | 4 Rand | Backend, Badge, URL-Auflösung, stabile API, README | abgeschlossen |
 | 4b Polling-Robustheit | zwei Lebenszyklus-Fehler im Skript | abgeschlossen |
-| 5 Push | Optional PWA integration inside the bundle, loose dependency | implemented; real device delivery not verified |
+| 5 Push | optionale PWA-Integration im Bundle, lose Abhängigkeit | abgeschlossen, im Demo bis zur entschlüsselten Nutzlast geprüft |
+| 6 Backend-Fixes | Absturz der Konversationsliste, roher Zeitstempel | abgeschlossen, in der Oberfläche geprüft |
 
-Offen außerhalb der Phasen:
+### Offene Themen
 
-* Die Backend-Oberfläche ist nicht im Browser geprüft, dafür ist eine
-  Backend-Anmeldung nötig. Registrierung, Listen und Callbacks sind über
-  den Host-Smoke-Test und Integrationstests belegt.
-* Die Root-Seite des DDEV-Demos wurde von `contao0507.contao.hhdev` auf
-  eine leere Domain umgestellt, damit das Browser-Panel der Desktop-App
-  sie über `https://127.0.0.1:<port>` erreicht. Für den Dauerbetrieb
-  entweder zurücksetzen oder `host_https_port` im DDEV-Projekt fixieren.
-* `.docs/BROWSER_CHECKLIST.md` listet, was nur auf echten Geräten prüfbar
-  bleibt: iOS- und Android-Tastatur, Standalone-PWA, Screenreader.
+**Nur auf echten Geräten prüfbar** (in `.docs/BROWSER_CHECKLIST.md` gelistet):
+iOS- und Android-Tastatur, Standalone-PWA, Screenreader-Ansagen, die
+tatsächliche Anzeige einer Push-Benachrichtigung samt
+Service-Worker-Registrierung und Berechtigungsdialog.
+
+**Vor einer Veröffentlichung zu klären:**
+
+* Keine CI-Konfiguration im Repository. Die Prüfungen laufen bisher nur
+  lokal in DDEV.
+* `contao/contao-rector` steht als `dev-main` in den Dev-Abhängigkeiten,
+  weil keine passende getaggte Version existierte. Vor einem Release
+  prüfen, ob es inzwischen eine gibt.
+* `phpunit.xml.dist` bricht bei Warnungen, riskanten Tests und Notices ab,
+  aber nicht bei Deprecations. Die Regel in `AGENTS.md` verlangt, dass
+  eigene Deprecations einen Lauf scheitern lassen; technisch erzwungen ist
+  das noch nicht.
+* Version 0.1.0 im Changelog ist als „Unreleased" markiert, es gibt kein
+  Tag und nichts ist zum Remote gepusht.
+
+**Bewusst akzeptierte Grenzen**, im README dokumentiert: Der Gruppenfilter
+der Kontaktsuche und die Batch-Beschriftung im Backend sind für kleine bis
+mittlere Mitgliederzahlen ausgelegt und nicht auf großen Beständen
+gemessen. Projekt-Templates, die zusätzlichen wechselnden Zustand in der
+Konversationsliste anzeigen, müssen den Fingerabdruck erweitern, sonst
+unterdrückt der Server deren Aktualisierung.
+
+**Zustand des Demo-Projekts**, falls es zurückgebaut werden soll:
+
+* Die Root-Seite hat keine Domain mehr, damit das Browser-Panel sie über
+  `https://127.0.0.1:<port>` erreicht. Entweder zurücksetzen auf
+  `contao0507.contao.hhdev` oder `host_https_port` im DDEV-Projekt fixieren.
+* Installiert sind `heimrichhannot/contao-pwa-bundle` und
+  `minishlink/web-push`, dazu eine PWA-Konfiguration und ein
+  VAPID-Schlüsselpaar in `config/config.yaml`. Die Schlüssel gelten nur
+  für dieses Demo.
+* 54 Demo-Mitglieder mit Präfix `phase3`, zwei Chat-Seiten, zwei
+  Layout-Kopien und 56 Konversationen mit Testnachrichten.
 
 ### Erkenntnisse aus dem Backend-Test
 
