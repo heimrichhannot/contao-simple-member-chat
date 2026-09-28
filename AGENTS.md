@@ -65,3 +65,6 @@
 - Schreibe jede Änderung als Listenpunkt mit Kategorie und Doppelpunkt, z. B. `- Fixed: Beschreibung`.
 - Kategorien: `Added` (neue Features), `Changed` (bestehende Funktionalität), `Deprecated` (zur Entfernung vorgesehen), `Removed` (entfernte Features), `Fixed` (Bugfixes), `Security` (geschlossene Sicherheitslücken).
 - Überführe beim Release die unveröffentlichten Einträge in den neuen Versionsabschnitt und behalte darüber einen leeren Abschnitt `## [Unreleased]`.
+- Beschreibe die Änderung aus Sicht des Nutzers oder Integrators, nicht ihre Umsetzung. Ein Eintrag ist in der Regel ein Satz.
+- Lass Klassennamen, CSS-Eigenschaften, Methoden, Dateinamen, Ursachenanalyse und Lösungsweg weg. Das gehört in die Dokumentation und in die Commit-Message.
+- Nenne technische Bezeichner nur, wenn der Leser sie selbst verwenden muss, etwa bei einer umbenannten Konfigurationsoption oder einem Breaking Change.
