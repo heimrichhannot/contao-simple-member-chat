@@ -154,6 +154,11 @@ assert 'member-chat__list-item--current' in current and 'aria-current="page"' in
 assert current.count('member-chat__list-item--current') == 1
 assert 'member-chat__list-item--current' not in (p/'list.html').read_text()
 assert 'member-chat__unread' in (p/'list.html').read_text()
+# Every entry states when its newest message arrived; the client rewrites it relatively.
+items=re.findall(r'<a[^>]*class="[^"]*member-chat__list-item.*?</a>', (p/'list.html').read_text(), re.S)
+assert items, 'the list must render conversations'
+for item in items:
+    assert re.search(r'<time[^>]*class="[^"]*member-chat__time[^"]*"[^>]*datetime="\d{4}-\d{2}-\d{2}T', item), 'list item without a machine readable time'
 legacy=(p/'legacy.html').read_text()
 assert re.search(r'id="chat-conversations"[^>]*src="[^"]*current=', legacy)
 assert 'No contacts found.' in (p/'no-contacts.html').read_text()

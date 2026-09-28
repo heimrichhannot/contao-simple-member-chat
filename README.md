@@ -311,6 +311,11 @@ Preserve these script contracts when overriding markup:
   `data-chat-last-message-at`. Scroll state uses `data-chat-at-bottom` and
   `data-chat-has-new`; loading/focus/search attributes in supplied forms remain
   necessary. Keep accessible labels, log/live roles and error associations.
+- Contact search: keep the field's `id`. A response replaces the whole
+  `chat-search` frame, so the script restores focus, the typed value and the
+  caret from the element it replaces; without a stable `id` the caret would jump
+  to the start of the query on every keystroke. A response for a query the
+  visitor has already moved past is discarded instead of rendered.
 
 Messages use the earliest unseen `after` window in chronological order; full
 pages drain until fewer than `page_size` messages arrive. Successful sends
@@ -342,6 +347,7 @@ reaching for structural selectors:
 | The open conversation | additionally `member-chat__list-item--current` and `aria-current="page"` |
 | Avatar or initial | `member-chat__avatar`, initials additionally `member-chat__avatar--initial` |
 | Partner name | `member-chat__partner` |
+| Time of the newest message | `member-chat__time` |
 | Last message excerpt | `member-chat__excerpt` |
 | Unread count | `member-chat__status member-chat__unread` |
 | Muted marker | `member-chat__status member-chat__muted` |
@@ -350,6 +356,13 @@ The open conversation is marked server-side: the list frame URL carries the
 current conversation as a `current` parameter, so polls and history loads keep
 the marker. `--member-chat-current-bg`, `--member-chat-unread-bg` and
 `--member-chat-unread-fg` set the default colours.
+
+Every entry states when its newest message arrived, as a `<time>` element that
+carries the full timestamp in `datetime` and is rewritten to a relative one by
+the same client code that handles message times, so it follows the page language
+and the device timezone. A conversation without messages renders no time.
+`--member-chat-time-fg` sets its colour. Like the avatar, excerpt and status, the
+element carries no layout rules: arrange the parts in your own CSS.
 
 ### Sender names
 
@@ -379,6 +392,7 @@ properties on `.member-chat`; maintain accessible contrast after overrides.
 | `load-more-bg`, `load-more-fg` | accent, control-fg |
 | `new-messages-bg`, `new-messages-fg` | accent, control-fg |
 | `day-fg` | `#475569` |
+| `time-fg` | `day-fg` |
 | `history-min-height` | `12rem` |
 | `header-font-size`, `header-line-height`, `header-gap` | `1rem`, `1.25`, `.5rem` |
 | `header-control-font-size`, `header-control-padding` | `.875rem`, `.5rem` |

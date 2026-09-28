@@ -20,6 +20,13 @@
         {%- endif -%}
         <strong{{ attrs().addClass('member-chat__partner').mergeWith(partner_attributes|default) }}>{{ item.partner.displayName }}</strong>
     {% endblock %}
+    {% block time %}
+        {#- The client rewrites this to a relative time, like the ones in the thread.
+            A conversation whose last message was deleted has no time to show. -#}
+        {%- if item.lastMessageAt -%}
+            <time{{ attrs().addClass('member-chat__time').set('datetime', item.lastMessageAt|date('c')).mergeWith(time_attributes|default) }}>{{ item.lastMessageAt|date(datim_format) }}</time>
+        {%- endif -%}
+    {% endblock %}
     {% block excerpt %}<span{{ attrs().addClass('member-chat__excerpt').mergeWith(excerpt_attributes|default) }}>{{ item.excerpt }}</span>{% endblock %}
     {% block status %}
         {%- if item.muted -%}

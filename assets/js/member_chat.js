@@ -380,11 +380,20 @@ document.addEventListener("turbo:before-frame-render", event => {
         }
     }
     if (frame.id === "chat-search" && frame.contains(document.activeElement)) {
-        const focusedId = document.activeElement.id
+        const focused = document.activeElement
+        const focusedId = focused.id
+        // The response carries the query as it was when the request went out and
+        // Turbo replaces the field, so the caret would land at position 0.
+        const caret = typeof focused.selectionStart === "number" ? { value: focused.value, start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null
         const render = event.detail.render
         event.detail.render = async (current, incoming) => {
             await render(current, incoming)
-            document.getElementById(focusedId)?.focus({ preventScroll: true })
+            const element = document.getElementById(focusedId)
+            if (!element) return
+            element.focus({ preventScroll: true })
+            if (!caret) return
+            if (element.value !== caret.value) element.value = caret.value
+            element.setSelectionRange(caret.start, caret.end, caret.direction === "none" ? undefined : caret.direction)
         }
     }
     if (!frame.matches?.("[data-chat-poll]")) return

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Typing in the contact search no longer moves the caret to the start of the
+  field. A response replaces the whole search frame, so the client now restores
+  the typed value and the caret position along with the focus.
+- Every conversation in the list shows when its newest message arrived, as a
+  `member-chat__time` element that the client rewrites to a relative time.
+  `--member-chat-time-fg` sets its colour.
+
 ## 0.1.1 — 2026-09-21
 
 - The conversation list is now styleable: every part of a list item carries a
