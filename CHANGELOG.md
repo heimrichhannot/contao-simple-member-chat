@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-28
+
 - Fixed: Typing in the contact search no longer moves the cursor back to the
   start of the search field.
 - Added: Every conversation in the list shows when its last message arrived.
