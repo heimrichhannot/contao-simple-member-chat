@@ -8,6 +8,10 @@
 - Every conversation in the list shows when its newest message arrived, as a
   `member-chat__time` element that the client rewrites to a relative time.
   `--member-chat-time-fg` sets its colour.
+- A list entry now lays its parts out explicitly: partner and time on the first
+  line, the message excerpt and the status on the second, the avatar beside
+  both. The rules are unlayered, so a broad theme rule such as
+  `a { display: flex }` no longer pulls the entry onto a single line.
 
 ## 0.1.1 — 2026-09-21
 

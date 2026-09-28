@@ -361,8 +361,13 @@ Every entry states when its newest message arrived, as a `<time>` element that
 carries the full timestamp in `datetime` and is rewritten to a relative one by
 the same client code that handles message times, so it follows the page language
 and the device timezone. A conversation without messages renders no time.
-`--member-chat-time-fg` sets its colour. Like the avatar, excerpt and status, the
-element carries no layout rules: arrange the parts in your own CSS.
+`--member-chat-time-fg` sets its colour.
+
+The entry itself is a three column grid: the avatar beside both lines, partner
+and time on the first, excerpt and status on the second. Those structural rules
+are unlayered, because a broad theme rule such as `a { display: flex }` would
+otherwise pull the whole entry onto one line. Override them with an equally
+specific unlayered rule, or place the parts yourself with `grid-area`.
 
 ### Sender names
 
@@ -380,8 +385,9 @@ own CSS.
 ## Styling
 
 Most rules are in the `member-chat` cascade layer. Project styles can override
-them; narrow unlayered rules protect the compact header, history minimum,
-compose area and pressed mute state against broad theme heading rules. Set
+them; narrow unlayered rules protect the compact header, conversation list
+entry, history minimum, compose area and pressed mute state against broad theme
+rules. Set
 properties on `.member-chat`; maintain accessible contrast after overrides.
 
 | Custom property (prefix `--member-chat-`) | Default |
