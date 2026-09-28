@@ -2,16 +2,11 @@
 
 ## [Unreleased]
 
-- Fixed: Typing in the contact search no longer moves the caret to the start of
-  the field. A response replaces the whole search frame, so the client now
-  restores the typed value and the caret position along with the focus.
-- Added: Every conversation in the list shows when its newest message arrived,
-  as a `member-chat__time` element that the client rewrites to a relative time.
-  `--member-chat-time-fg` sets its colour.
-- Changed: A list entry lays its parts out explicitly: partner and time on the
-  first line, the message excerpt and the status on the second, the avatar
-  beside both. The rules are unlayered, so a broad theme rule such as
-  `a { display: flex }` no longer pulls the entry onto a single line.
+- Fixed: Typing in the contact search no longer moves the cursor back to the
+  start of the search field.
+- Added: Every conversation in the list shows when its last message arrived.
+- Changed: In the conversation list, the message excerpt sits on its own line
+  below the partner name.
 
 ## [0.1.1] - 2026-09-21
 
