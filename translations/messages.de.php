@@ -10,6 +10,7 @@ return [
     'member_chat.mute' => 'Konversation stummschalten',
     'member_chat.new_messages' => 'Neue Nachrichten ↓',
     'member_chat.no_contacts' => 'Keine Kontakte gefunden.',
+    'member_chat.push_title' => 'Neue Nachricht von %sender%',
     'member_chat.today' => 'Heute',
     'member_chat.yesterday' => 'Gestern',
 

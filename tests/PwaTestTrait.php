@@ -28,6 +28,8 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RequestContext;
+use Symfony\Component\Translation\Loader\PhpFileLoader;
+use Symfony\Component\Translation\Translator;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 trait PwaTestTrait
@@ -46,6 +48,7 @@ trait PwaTestTrait
         ?array $subscribers = null,
         string $supportPush = '1',
         string $domain = 'example.org',
+        string $rootLanguage = '',
     ): SendChatPushHandler {
         if (!$messages instanceof MessageGatewayInterface) {
             $messages = self::createStub(MessageGatewayInterface::class);
@@ -78,7 +81,7 @@ trait PwaTestTrait
             return $targets === [] ? null : new Collection($targets, 'tl_pwa_pushsubscriber');
         });
         $pages = $this->createAdapterStub(['findPublishedById', 'findPublishedRootPages']);
-        $pages->method('__call')->willReturnCallback(function (string $method, array $args) use ($link, $domain): ?PageModel {
+        $pages->method('__call')->willReturnCallback(function (string $method, array $args) use ($link, $domain, $rootLanguage): ?PageModel {
             if (!$link || $method !== 'findPublishedById') {
                 return null;
             }
@@ -89,6 +92,8 @@ trait PwaTestTrait
                 'isPublic' => true,
                 'rootIsPublic' => true,
                 'domain' => $domain,
+                'rootLanguage' => $rootLanguage,
+                'language' => $rootLanguage,
             ]);
         });
         $framework = $this->createContaoFrameworkStub([
@@ -119,6 +124,21 @@ trait PwaTestTrait
         ]]);
         $contacts = new ContactResolver($members, new ContactFactory(new ChatOptions(), self::createStub(Studio::class), self::createStub(ContaoFramework::class)), self::createStub(TranslatorInterface::class));
 
-        return new SendChatPushHandler($messages, $conversations, $participants, $contacts, new ConversationUrlGenerator($framework, $urls, $participants), $framework, $sender, $options, $logger ?? new NullLogger());
+        return new SendChatPushHandler($messages, $conversations, $participants, $contacts, new ConversationUrlGenerator($framework, $urls, $participants), $framework, $sender, $options, self::pushTranslator(), $logger ?? new NullLogger());
+    }
+
+    /**
+     * The shipped catalogues through the real translator: Symfony, not this bundle,
+     * resolves the placeholder and the locale fallback.
+     */
+    protected static function pushTranslator(string $locale = 'en'): TranslatorInterface
+    {
+        $translator = new Translator($locale);
+        $translator->addLoader('php', new PhpFileLoader());
+        foreach (['en', 'de'] as $catalogue) {
+            $translator->addResource('php', __DIR__ . '/../translations/messages.' . $catalogue . '.php', $catalogue);
+        }
+
+        return $translator;
     }
 }

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace HeimrichHannot\SimpleMemberChatBundle\Integration\Pwa;
 
 use Contao\CoreBundle\Framework\ContaoFramework;
+use Contao\CoreBundle\Util\LocaleUtil;
 use Contao\Model\Collection;
+use Contao\PageModel;
 use HeimrichHannot\PwaBundle\Model\PwaConfigurationsModel;
 use HeimrichHannot\PwaBundle\Model\PwaPushSubscriberModel;
 use HeimrichHannot\PwaBundle\Sender\PushNotificationSender;
@@ -19,6 +21,7 @@ use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[AsMessageHandler]
 final readonly class SendChatPushHandler
@@ -32,6 +35,7 @@ final readonly class SendChatPushHandler
         private ContaoFramework $framework,
         private PushNotificationSender $sender,
         private PushOptions $options,
+        private TranslatorInterface $translator,
         private LoggerInterface $logger,
     ) {
     }
@@ -54,7 +58,7 @@ final readonly class SendChatPushHandler
                 return;
             }
 
-            $title = $this->contacts->resolve($message->authorId)->displayName;
+            $author = $this->contacts->resolve($message->authorId)->displayName;
             $body = $this->options->bodyLength === 0 ? null : mb_substr($message->body, 0, $this->options->bodyLength, 'UTF-8');
             foreach (array_unique($queued->recipientIds) as $recipientId) {
                 try {
@@ -85,6 +89,11 @@ final readonly class SendChatPushHandler
                         continue;
                     }
 
+                    // The notification speaks the language of the page it opens.
+                    $page = $this->urls->pageForConversation($conversation, $recipientId);
+                    $title = $this->translator->trans('member_chat.push_title', [
+                        '%sender%' => $author,
+                    ], 'messages', $page instanceof PageModel ? LocaleUtil::formatAsLocale((string) ($page->rootLanguage !== null && $page->rootLanguage !== '' ? $page->rootLanguage : $page->language)) : null);
                     $url = $this->urls->forConversation($conversation, $recipientId, UrlGeneratorInterface::ABSOLUTE_URL, $queued->baseUrl);
                     if (!$this->sender->sendWithLog(new ChatNotification($title, $body, $url), $config, $this->logger, $targets)) {
                         $this->logger->warning('Chat push sender could not send notification.', [

@@ -32,7 +32,7 @@ final readonly class ConversationUrlGenerator
      */
     public function forConversation(Conversation $conversation, int $memberId, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH, ?string $baseUrl = null): ?string
     {
-        $page = $this->resolvePage($this->participants->state($conversation->id, $memberId)['lastPageId'] ?? 0);
+        $page = $this->pageForConversation($conversation, $memberId);
         if (!$page instanceof PageModel) {
             return null;
         }
@@ -72,6 +72,15 @@ final readonly class ConversationUrlGenerator
         $page = $this->resolvePage($this->participants->lastPageId($memberId));
 
         return $page instanceof PageModel ? $this->generate($page) : null;
+    }
+
+    /**
+     * Stable integration API. The page a link for this member would point at, which
+     * also decides the language that member reads the conversation in.
+     */
+    public function pageForConversation(Conversation $conversation, int $memberId): ?PageModel
+    {
+        return $this->resolvePage($this->participants->state($conversation->id, $memberId)['lastPageId'] ?? 0);
     }
 
     private function resolvePage(int $pageId): ?PageModel

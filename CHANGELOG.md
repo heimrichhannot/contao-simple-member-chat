@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Changed: A push notification is now titled "New message from" and the sender's
+  name instead of the bare name, in the language of the page the recipient opens.
+
 ## [0.1.2] - 2026-09-28
 
 - Fixed: Typing in the contact search no longer moves the cursor back to the

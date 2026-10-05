@@ -40,7 +40,7 @@ final class SendChatPushHandlerTest extends ContaoTestCase
                 'data' => [
                     'clickJumpTo' => 'https://example.org/page' . ($member + 100) . '/uuid',
                 ],
-                'title' => 'Alice Chat',
+                'title' => 'New message from Alice Chat',
                 'body' => 'Hell',
             ], $notification->toArray());
 
@@ -48,6 +48,30 @@ final class SendChatPushHandlerTest extends ContaoTestCase
         });
         $this->pushHandler($participants, $sender)(new SendChatPushMessage(42, [7, 9, 9, 10, 11, 12, 13]));
         self::assertSame([9, 13], $sent);
+    }
+
+    public function testTheTitleNamesTheSenderInTheLanguageOfTheDestinationPage(): void
+    {
+        $participants = self::createStub(ParticipantGatewayInterface::class);
+        $participants->method('state')->willReturn([
+            'lastReadAt' => 0,
+            'lastReadMessageId' => 0,
+            'lastPageId' => 109,
+            'muted' => false,
+        ]);
+        foreach ([
+            'de_DE' => 'Neue Nachricht von Alice Chat',
+            'en' => 'New message from Alice Chat',
+            '' => 'New message from Alice Chat',
+        ] as $language => $expected) {
+            $sender = $this->createMock(PushNotificationSender::class);
+            $sender->expects(self::once())->method('sendWithLog')->willReturnCallback(static function (ChatNotification $notification) use ($expected): bool {
+                self::assertSame($expected, $notification->toArray()['title']);
+
+                return true;
+            });
+            $this->pushHandler($participants, $sender, rootLanguage: $language)(new SendChatPushMessage(42, [9]));
+        }
     }
 
     public function testUnicodeTruncationPreservesCharacters(): void
@@ -62,7 +86,7 @@ final class SendChatPushHandlerTest extends ContaoTestCase
         $sender = $this->createMock(PushNotificationSender::class);
         $sender->expects(self::once())->method('sendWithLog')->willReturnCallback(static function (ChatNotification $notification): bool {
             self::assertSame([
-                'title' => 'Alice Chat',
+                'title' => 'New message from Alice Chat',
                 'body' => 'Hello 🌍',
             ], $notification->toArray());
 
@@ -83,7 +107,7 @@ final class SendChatPushHandlerTest extends ContaoTestCase
         $sender = $this->createMock(PushNotificationSender::class);
         $sender->expects(self::once())->method('sendWithLog')->willReturnCallback(static function (ChatNotification $notification): bool {
             self::assertSame([
-                'title' => 'Alice Chat',
+                'title' => 'New message from Alice Chat',
             ], $notification->toArray());
 
             return true;

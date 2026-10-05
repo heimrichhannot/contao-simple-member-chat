@@ -529,7 +529,12 @@ is actively reading. The 60-second default provides room for the default
 throttle and normal 4-second polling, but cannot guarantee suppression during
 browser suspension or network delays.
 
-The title is the sender's display name from `ContactResolver`. **Push payloads
+The title is `member_chat.push_title`, by default "New message from" and the
+sender's display name from `ContactResolver`. It is translated into the language
+of the root page the recipient's own link points at, so each recipient of the
+same message can receive a different language; without a resolvable page the
+translator's default locale applies. Override the key in your project catalogue
+to change the wording. **Push payloads
 leave the chat server and reach device notification systems**, potentially
 including a lock screen. With a positive `body_length`, they also contain private
 message text. The default omits text, but still includes the sender name and,
@@ -542,6 +547,14 @@ published-root fallback, rendered as an absolute URL in `data.clickJumpTo`.
 Configure root domains and a correct router `default_uri` for CLI workers where
 needed. No resolvable destination means a notification without a deep link.
 Opening a URL still requires the normal frontend login/access checks.
+
+Whether a click reaches an installed app is the PWA bundle's service worker, not
+this bundle: it focuses an already open window of the same origin and navigates
+it, and opens a new window only when there is none. Give the deep link the same
+origin the app was installed from — a link to `example.com` cannot focus an app
+installed from `www.example.com`, and the browser opens a tab instead. Setting
+the root page domain is what makes the link canonical; the sending request's
+host is only the fallback.
 
 Real push delivery is not covered by automated tests. Acceptance requires a
 running worker, valid VAPID keys, a subscribed device and its service worker,
