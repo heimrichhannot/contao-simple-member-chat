@@ -258,7 +258,7 @@ final class ContactsTest extends DatabaseTestCase
             'policy' => 'sliding_window',
             'limit' => 1,
             'interval' => '1 minute',
-        ], new InMemoryStorage()), new ChatTransaction($this->connection), new ChatEventDispatcher($dispatcher, new NullLogger()));
+        ], new InMemoryStorage()), new ChatTransaction($this->connection), new ChatEventDispatcher($dispatcher, new NullLogger()), $this->chatAccess());
         $conversation = $service->openWith(9, 7);
         self::assertSame([7, 9], $participants->memberIds($conversation->id));
         self::assertCount(1, $events);

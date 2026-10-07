@@ -2,6 +2,8 @@
 {% block content %}
     {% if as_editor_view %}
         <p>{{ 'member_chat.editor_hint'|trans }}</p>
+    {% elseif access_decision %}
+        {% block access_denied %}<p{{ attrs().addClass('member-chat__access-denied') }}>{{ 'member_chat.access_denied'|trans }}</p>{% endblock %}
     {% elseif view is null %}
         {% block login_hint %}<p>{{ 'member_chat.login_hint'|trans }}</p>{% endblock %}
     {% else %}

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Added: Projects can restrict who may use the chat by decorating the chat
+  access voter (attribute `MEMBER_CHAT_ACCESS`). Members without access see a
+  notice instead of the chat, which a project can replace, for example with a
+  consent form.
+- Added: Members without chat access can no longer be contacted or receive
+  messages; their chat partners see a notice instead of the message form.
 - Changed: A push notification is now titled "New message from" and the sender's
   name instead of the bare name, in the language of the page the recipient opens.
 

@@ -108,7 +108,7 @@ final class GatewaysTest extends DatabaseTestCase
         $service = new ConversationService($this->conversations, $this->participants, $permission, $this->memberProvider(9), new RateLimiterFactory([
             'id' => 'race',
             'policy' => 'no_limit',
-        ], new InMemoryStorage()), new ChatTransaction($this->connection), new ChatEventDispatcher($dispatcher, new NullLogger()));
+        ], new InMemoryStorage()), new ChatTransaction($this->connection), new ChatEventDispatcher($dispatcher, new NullLogger()), $this->chatAccess());
         $conversation = $service->openWith(9, 7);
         self::assertSame([7, 9], $this->participants->memberIds($conversation->id));
         self::assertCount(1, $this->conversations->listForMember(9, 10));

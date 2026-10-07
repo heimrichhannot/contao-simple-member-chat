@@ -33,4 +33,6 @@ return [
     'member_chat.read_only' => 'This conversation is read-only.',
     'member_chat.message_empty' => 'Enter a message.',
     'member_chat.message_too_long' => 'The message is too long.',
+    'member_chat.access_denied' => 'The chat is not enabled for you.',
+    'member_chat.partner_unavailable' => 'This member cannot receive chat messages at the moment.',
 ];

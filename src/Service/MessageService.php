@@ -27,6 +27,7 @@ final readonly class MessageService
         private RateLimiterFactoryInterface $rateLimiter,
         private ChatTransaction $transaction,
         private ChatEventDispatcher $events,
+        private ChatAccessChecker $chatAccess,
     ) {
     }
 
@@ -57,9 +58,13 @@ final readonly class MessageService
                 throw new ChatException('member_chat.read_only', 403);
             }
 
+            $recipients = array_values(array_filter($memberIds, static fn (int $id): bool => $id !== $authorId));
+            if (!$this->chatAccess->isGrantedFor($recipients[0] ?? 0)) {
+                throw new ChatException('member_chat.partner_unavailable', 403);
+            }
+
             $message = $this->messages->insert($conversationId, $authorId, $body, time());
             $conversation = $this->conversations->updateLastMessage($conversation, $message);
-            $recipients = array_values(array_filter($memberIds, static fn (int $id): bool => $id !== $authorId));
 
             return new MessageSentEvent($message, $conversation, $authorId, $recipients);
         });

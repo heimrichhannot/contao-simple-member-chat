@@ -6,6 +6,7 @@ namespace HeimrichHannot\SimpleMemberChatBundle\Controller;
 
 use HeimrichHannot\SimpleMemberChatBundle\Contact\ContactService;
 use HeimrichHannot\SimpleMemberChatBundle\Exception\AuthenticationRequiredException;
+use HeimrichHannot\SimpleMemberChatBundle\Service\ChatAccessChecker;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ChatReader;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationAccess;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
@@ -30,6 +31,7 @@ final readonly class ChatFrameController
         private TurboResponseFactory $responses,
         private Environment $twig,
         private ContactService $contacts,
+        private ChatAccessChecker $chatAccess,
     ) {
     }
 
@@ -122,13 +124,14 @@ final readonly class ChatFrameController
     public function compose(string $uuid, Request $request): Response
     {
         try {
-            $this->members->requireMemberId();
+            $viewerId = $this->members->requireMemberId();
         } catch (AuthenticationRequiredException) {
             return $this->responses->html('', 401);
         }
 
         $conversation = $this->access->requireUuid($uuid);
         $context = $this->contexts->create($this->pages->page($request->query->getInt('page')), $conversation);
+        $context['partner_access'] = $this->chatAccess->isGrantedForPartner($conversation, $viewerId);
 
         return $this->responses->html($this->twig->render('@Contao/member_chat/compose_form.html.twig', $context));
     }

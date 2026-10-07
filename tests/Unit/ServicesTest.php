@@ -109,6 +109,22 @@ final class ServicesTest extends ServiceTestCase
         $this->conversationService($permission)->openWith(9, 7);
     }
 
+    public function testMemberWithoutChatAccessCannotBeContacted(): void
+    {
+        $this->conversations = $this->createMock(ConversationGatewayInterface::class);
+        $permission = self::createStub(ContactPermissionInterface::class);
+        $permission->method('canContact')->willReturn(true);
+        $this->conversations->method('findByPair')->willReturn(null);
+        $this->conversations->expects(self::never())->method('insert');
+        try {
+            $this->conversationService($permission, denied: [7])->openWith(9, 7);
+            self::fail('Expected a denied contact.');
+        } catch (ChatException $chatException) {
+            self::assertSame('member_chat.contact_denied', $chatException->translationKey);
+            self::assertSame(403, $chatException->statusCode);
+        }
+    }
+
     public function testCannotOpenWithSelf(): void
     {
         $permission = $this->createMock(ContactPermissionInterface::class);
@@ -136,6 +152,24 @@ final class ServicesTest extends ServiceTestCase
         });
         self::assertSame($message, $this->messageService()->send(1, 9, ' Hello '));
         self::assertTrue($seen);
+    }
+
+    public function testPartnerWithoutChatAccessCannotReceiveMessages(): void
+    {
+        $this->messages = $this->createMock(MessageGatewayInterface::class);
+        $this->conversations->method('find')->willReturn($this->conversation());
+        $this->participants->method('memberIds')->willReturn([7, 9]);
+        $this->messages->expects(self::never())->method('insert');
+        $this->dispatcher->addListener(MessageSentEvent::class, static function (): never {
+            self::fail('A refused message must not be dispatched.');
+        });
+        try {
+            $this->messageService(denied: [7])->send(1, 9, 'Hello');
+            self::fail('Expected the partner to be unavailable.');
+        } catch (ChatException $chatException) {
+            self::assertSame('member_chat.partner_unavailable', $chatException->translationKey);
+            self::assertSame(403, $chatException->statusCode);
+        }
     }
 
     public function testOrphanConversationCannotReceiveMessages(): void
@@ -224,16 +258,22 @@ final class ServicesTest extends ServiceTestCase
         ], new InMemoryStorage());
     }
 
-    private function conversationService(ContactPermissionInterface $permission, ?RateLimiterFactory $limiter = null): ConversationService
+    /**
+     * @param list<int> $denied
+     */
+    private function conversationService(ContactPermissionInterface $permission, ?RateLimiterFactory $limiter = null, array $denied = []): ConversationService
     {
-        return new ConversationService($this->conversations, $this->participants, $permission, $this->memberProvider(9), $limiter ?? $this->limiter(), new ChatTransaction($this->connection), new ChatEventDispatcher($this->dispatcher, new NullLogger()));
+        return new ConversationService($this->conversations, $this->participants, $permission, $this->memberProvider(9), $limiter ?? $this->limiter(), new ChatTransaction($this->connection), new ChatEventDispatcher($this->dispatcher, new NullLogger()), $this->chatAccess($denied));
     }
 
-    private function messageService(?RateLimiterFactory $limiter = null): MessageService
+    /**
+     * @param list<int> $denied
+     */
+    private function messageService(?RateLimiterFactory $limiter = null, array $denied = []): MessageService
     {
         $authorization = self::createStub(AuthorizationCheckerInterface::class);
         $authorization->method('isGranted')->willReturn(true);
 
-        return new MessageService($this->conversations, $this->participants, $this->messages, new MessageTextSanitizer(new ChatOptions()), $this->memberProvider(9), $authorization, $limiter ?? $this->limiter(), new ChatTransaction($this->connection), new ChatEventDispatcher($this->dispatcher, new NullLogger()));
+        return new MessageService($this->conversations, $this->participants, $this->messages, new MessageTextSanitizer(new ChatOptions()), $this->memberProvider(9), $authorization, $limiter ?? $this->limiter(), new ChatTransaction($this->connection), new ChatEventDispatcher($this->dispatcher, new NullLogger()), $this->chatAccess($denied));
     }
 }

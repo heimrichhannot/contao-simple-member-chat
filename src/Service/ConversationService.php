@@ -23,6 +23,7 @@ final readonly class ConversationService
         private RateLimiterFactoryInterface $rateLimiter,
         private ChatTransaction $transaction,
         private ChatEventDispatcher $events,
+        private ChatAccessChecker $chatAccess,
     ) {
     }
 
@@ -46,7 +47,7 @@ final readonly class ConversationService
             throw new ChatException('member_chat.rate_limited', 429);
         }
 
-        if (!$this->contactPermission->canContact($initiatorId, $memberId)) {
+        if (!$this->contactPermission->canContact($initiatorId, $memberId) || !$this->chatAccess->isGrantedFor($memberId)) {
             throw new ChatException('member_chat.contact_denied', 403);
         }
 

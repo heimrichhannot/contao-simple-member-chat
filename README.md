@@ -202,7 +202,8 @@ Both built-ins behave identically in every other respect:
   `canContact()` is false.
 
 Only starting a new conversation consults the provider. An existing conversation
-stays readable and writable even after the contact permission is revoked.
+stays readable and writable even after the contact permission is revoked, unless
+the partner loses [chat access](#chat-access).
 
 ### Writing your own provider
 
@@ -254,6 +255,68 @@ revoked. `ContactResolver::resolveMany()` independently resolves known members,
 including inactive members; missing members become a translated placeholder
 with `memberId = 0`. Result limits are caps, not a guarantee to fill every slot.
 
+## Chat access
+
+Whether a member may use the chat at all is decided by Symfony security: the
+attribute `ChatAccessVoter::ACCESS` (`MEMBER_CHAT_ACCESS`). The bundle's
+`Security\Voter\ChatAccessVoter` grants it to every logged-in front end member.
+
+The bundle checks it at every entry point:
+
+* The content element renders the `access_denied` block instead of the chat. The
+  conversation in the URL is not looked up. The template receives the
+  `AccessDecision` as `access_decision` (including the reasons voters added) and
+  the usual context such as `request_token`, `page_id` and `back_url`, so the
+  block can offer an action.
+* Every `/_member_chat/` route answers a logged-in member without access with an
+  empty 403. Anonymous requests still get 401.
+* The unread badge renders nothing.
+* Members without access cannot be contacted and receive no messages: starting a
+  conversation with them fails, and in an existing conversation the compose form
+  is replaced by the `partner_unavailable` block and sending fails.
+
+`is_granted('MEMBER_CHAT_ACCESS')` works in Twig, for example to hide a link to
+the chat page.
+
+To add a requirement, **decorate** `ChatAccessVoter` instead of registering a
+second voter for the attribute. With a single voter the result is the same under
+every access decision strategy; Contao uses the priority strategy inside its
+firewalls, Symfony's default affirmative strategy applies elsewhere (e.g. in
+console commands and message handlers). For example, requiring a consent field:
+
+```php
+namespace App\Security;
+
+use HeimrichHannot\SimpleMemberChatBundle\Security\Voter\ChatAccessVoter;
+use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
+use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Vote;
+use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
+
+#[AsDecorator(ChatAccessVoter::class)]
+final readonly class ChatConsentVoter implements VoterInterface
+{
+    public function __construct(#[AutowireDecorated] private VoterInterface $inner) {}
+
+    public function vote(TokenInterface $token, mixed $subject, array $attributes, ?Vote $vote = null): int
+    {
+        $result = $this->inner->vote($token, $subject, $attributes, $vote);
+        if ($result !== self::ACCESS_GRANTED || $token->getUser()->chatConsent) {
+            return $result;
+        }
+
+        $vote?->addReason('The member has not consented to the chat.');
+
+        return self::ACCESS_DENIED;
+    }
+}
+```
+
+Requirements are checked for other members, too (`Service\ChatAccessChecker`
+loads them through Contao's front end user provider), so a decorator must only
+read the user object it receives, never the current session.
+
 ## Template and view contract
 
 Templates live under `contao/templates/` in `@Contao`, with `.twig-root`.
@@ -267,7 +330,8 @@ Use Contao's template hierarchy to extend, rather than copy, templates:
 ```
 
 Content-element blocks: `layout`, `search`, `conversations`,
-`conversation_header`, `messages`, `compose`, `empty_state`, `login_hint`.
+`conversation_header`, `messages`, `compose`, `empty_state`, `login_hint`,
+`access_denied`. `compose_form` has the blocks `form` and `partner_unavailable`.
 Partials in `@Contao/member_chat/` include `conversation_list`,
 `conversation_list_item`, `message_list`, `message`, `compose_form`,
 `contact_results`, `contact_result`, `mute`, `load_more`, `new_messages`,
@@ -289,6 +353,9 @@ Timestamps are Unix seconds. Context includes `page_id`, `language`,
 `list_url`, `search_url`, `open_url`, and for a selected conversation
 `messages_url`, `compose_url`, `mute_url`, `send_url`; also `embedded`, `history`,
 `query`, `contacts`, `error`, `text`. Anonymous content elements have `view = null`.
+Members without [chat access](#chat-access) also have `view = null` and an
+`access_decision`. The compose form has `partner_access` (false when the partner
+cannot use the chat).
 Roots/frames use `attrs().mergeWith(...)`; partial-specific `*_attributes`
 variables and `chat_attributes` allow classes/data attributes without replacing
 markup. Badge attributes cannot replace its required ID/polling/accessibility

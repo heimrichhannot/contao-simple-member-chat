@@ -9,6 +9,7 @@ use Contao\CoreBundle\String\HtmlAttributes;
 use Contao\PageModel;
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ParticipantGatewayInterface;
+use HeimrichHannot\SimpleMemberChatBundle\Security\Voter\ChatAccessVoter;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Tests\ServiceTestCase;
 use HeimrichHannot\SimpleMemberChatBundle\Twig\ChatRuntime;
@@ -16,6 +17,7 @@ use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 use Twig\Extension\AttributeExtension;
@@ -26,9 +28,10 @@ use Twig\TwigFunction;
 
 final class UnreadBadgeTest extends ServiceTestCase
 {
-    public function testBadgeRendersZeroPositiveAndAnonymousWithoutLosingPolling(): void
+    public function testBadgeRendersZeroPositiveAnonymousAndDeniedWithoutLosingPolling(): void
     {
-        foreach ([0, 3, -1] as $count) {
+        // -1: anonymous, -2: logged in without chat access
+        foreach ([0, 3, -1, -2] as $count) {
             $participants = $this->createMock(ParticipantGatewayInterface::class);
             $participants->expects($count < 0 ? self::never() : self::once())->method('unreadCount')->willReturn(max(0, $count));
             $pages = $this->createAdapterStub(['findPublishedRootPages']);
@@ -41,7 +44,9 @@ final class UnreadBadgeTest extends ServiceTestCase
             $request = Request::create('/ordinary-page');
             $request->setLocale('en');
             $requests = new RequestStack([$request]);
-            $runtime = new ChatRuntime($this->memberProvider($count < 0 ? 0 : 7), $participants, $urls, $routes, new ChatOptions(), $requests);
+            $authorization = self::createStub(AuthorizationCheckerInterface::class);
+            $authorization->method('isGranted')->willReturnCallback(static fn (string $attribute): bool => $attribute === ChatAccessVoter::ACCESS && $count !== -2);
+            $runtime = new ChatRuntime($this->memberProvider($count === -1 ? 0 : 7), $participants, $urls, $routes, new ChatOptions(), $requests, $authorization);
             $loader = new FilesystemLoader();
             $loader->addPath(__DIR__ . '/../../contao/templates', 'Contao');
             $twig = new Environment($loader, [

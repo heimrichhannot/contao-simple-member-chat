@@ -33,4 +33,6 @@ return [
     'member_chat.read_only' => 'Diese Konversation kann nur gelesen werden.',
     'member_chat.message_empty' => 'Geben Sie eine Nachricht ein.',
     'member_chat.message_too_long' => 'Die Nachricht ist zu lang.',
+    'member_chat.access_denied' => 'Der Chat ist für Sie nicht freigeschaltet.',
+    'member_chat.partner_unavailable' => 'Dieses Mitglied kann derzeit keine Chatnachrichten empfangen.',
 ];

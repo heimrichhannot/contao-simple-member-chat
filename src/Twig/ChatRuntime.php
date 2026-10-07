@@ -7,10 +7,12 @@ namespace HeimrichHannot\SimpleMemberChatBundle\Twig;
 use HeimrichHannot\SimpleMemberChatBundle\Configuration\ChatOptions;
 use HeimrichHannot\SimpleMemberChatBundle\Exception\AuthenticationRequiredException;
 use HeimrichHannot\SimpleMemberChatBundle\Gateway\ParticipantGatewayInterface;
+use HeimrichHannot\SimpleMemberChatBundle\Security\Voter\ChatAccessVoter;
 use HeimrichHannot\SimpleMemberChatBundle\Service\ConversationUrlGenerator;
 use HeimrichHannot\SimpleMemberChatBundle\Service\FrontendMemberProvider;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Twig\Attribute\AsTwigFunction;
 use Twig\Environment;
 
@@ -23,6 +25,7 @@ final readonly class ChatRuntime
         private UrlGeneratorInterface $routes,
         private ChatOptions $options,
         private RequestStack $requests,
+        private AuthorizationCheckerInterface $authorization,
     ) {
     }
 
@@ -39,6 +42,10 @@ final readonly class ChatRuntime
         try {
             $memberId = $this->members->requireMemberId();
         } catch (AuthenticationRequiredException) {
+            return '';
+        }
+
+        if (!$this->authorization->isGranted(ChatAccessVoter::ACCESS)) {
             return '';
         }
 
