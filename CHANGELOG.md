@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-07
+
 - Added: Projects can restrict who may use the chat by decorating the chat
   access voter (attribute `MEMBER_CHAT_ACCESS`). Members without access see a
   notice instead of the chat, which a project can replace, for example with a
